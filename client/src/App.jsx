@@ -198,6 +198,23 @@ export default function App() {
         }} />
       )}
 
+      {/* Corner decoration — bottom-left */}
+      <img
+        src="/corner-girl.png"
+        alt=""
+        aria-hidden="true"
+        style={{
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          width: '160px',
+          pointerEvents: 'none',
+          zIndex: 9997,
+          opacity: 0.92,
+          animation: 'fadeIn 1.2s ease-out forwards',
+        }}
+      />
+
       {/* Dynamic Background Elements */}
       <div style={{
         position: 'fixed',
