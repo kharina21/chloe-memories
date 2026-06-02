@@ -24,7 +24,8 @@ export default function NotificationBell({ apiBase, token, socket, onNavigate })
   const [notifs, setNotifs]   = useState([]);
   const [open, setOpen]       = useState(false);
   const [loading, setLoading] = useState(false);
-  const dropRef = useRef(null);
+  const dropRef = useRef(null);   // bell button wrapper
+  const menuRef = useRef(null);   // portal dropdown — lives outside dropRef in DOM
 
   const unread = notifs.filter(n => !n.read).length;
 
@@ -58,11 +59,13 @@ export default function NotificationBell({ apiBase, token, socket, onNavigate })
   }, [socket]);
 
   // Click outside → close
+  // IMPORTANT: menuRef must also be checked because the portal lives at document.body,
+  // NOT inside dropRef — without this, every click inside the dropdown triggers close
   useEffect(() => {
     const handler = (e) => {
-      if (dropRef.current && !dropRef.current.contains(e.target)) {
-        setOpen(false);
-      }
+      const inBell = dropRef.current?.contains(e.target);
+      const inMenu = menuRef.current?.contains(e.target);
+      if (!inBell && !inMenu) setOpen(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -121,6 +124,7 @@ export default function NotificationBell({ apiBase, token, socket, onNavigate })
       {/* Dropdown — rendered via Portal directly on body to bypass parent stacking context */}
       {open && createPortal(
         <div
+          ref={menuRef}
           className="glass-card animate-scale-in"
           style={{
             position: 'fixed',

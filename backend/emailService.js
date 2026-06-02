@@ -1,19 +1,11 @@
 import nodemailer from 'nodemailer';
 
 const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 587,
-  secure: false,        // STARTTLS — works on Render (port 465 may be blocked)
+  service: 'gmail',
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_APP_PASSWORD,
   },
-  tls: {
-    rejectUnauthorized: false,  // allow self-signed certs in some cloud envs
-  },
-  pool: true,
-  maxConnections: 3,
-  socketTimeout: 10000,        // 10s timeout
 });
 
 const BRAND = 'Chloe Memories 💕';
