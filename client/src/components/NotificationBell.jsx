@@ -20,7 +20,7 @@ function timeAgo(dateStr) {
   return `${Math.floor(h / 24)} ngày trước`;
 }
 
-export default function NotificationBell({ apiBase, token, socket }) {
+export default function NotificationBell({ apiBase, token, socket, onNavigate }) {
   const [notifs, setNotifs]   = useState([]);
   const [open, setOpen]       = useState(false);
   const [loading, setLoading] = useState(false);
@@ -176,7 +176,13 @@ export default function NotificationBell({ apiBase, token, socket }) {
             {notifs.map(n => (
               <div
                 key={n._id}
-                onClick={() => markRead(n._id)}
+                onClick={() => {
+                  markRead(n._id);
+                  if (n.postId) {
+                    setOpen(false);
+                    onNavigate?.(n.postId, n.type);
+                  }
+                }}
                 style={{
                   display: 'flex', alignItems: 'flex-start', gap: '12px',
                   padding: '12px 16px',

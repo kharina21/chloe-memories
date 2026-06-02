@@ -25,8 +25,15 @@ function Avatar({ user, size = 34, isMine }) {
       </div>;
 }
 
-export default function MomentCard({ post, currentUser, onReact, onComment, apiBase, token }) {
+export default function MomentCard({ post, currentUser, onReact, onComment, apiBase, token, autoOpenComments, highlight }) {
   const [showComments, setShowComments] = useState(false);
+
+  // Auto-open comments when navigated from notification
+  useEffect(() => {
+    if (autoOpenComments) {
+      setShowComments(true);
+    }
+  }, [autoOpenComments]);
 
   // New top-level comment
   const [commentText, setCommentText]   = useState('');
@@ -153,7 +160,21 @@ export default function MomentCard({ post, currentUser, onReact, onComment, apiB
 
   // ── Render ─────────────────────────────────────────────────
   return (
-    <div ref={cardRef} className="glass-card animate-fade-in" style={{ padding: '16px', width: '100%', marginBottom: '20px', position: 'relative', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+    <div
+      id={`post-${post._id}`}
+      ref={cardRef}
+      className="glass-card animate-fade-in"
+      style={{
+        padding: '16px',
+        width: '100%',
+        marginBottom: '20px',
+        position: 'relative',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '12px',
+        transition: 'box-shadow 0.4s ease',
+        ...(highlight ? { boxShadow: '0 0 0 3px #ff6b8b, 0 8px 32px rgba(255,107,139,0.35)' } : {}),
+      }}>
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>

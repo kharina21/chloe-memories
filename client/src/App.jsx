@@ -28,6 +28,8 @@ export default function App() {
   const [showProfileEdit, setShowProfileEdit] = useState(false);
   const [socket, setSocket] = useState(null);  // socket.io instance as state → triggers re-render
   const socketRef = useRef(null);              // ref copy for use inside event handlers (stale-closure safe)
+  const [highlightPostId, setHighlightPostId]           = useState(null);
+  const [openCommentPostId, setOpenCommentPostId]       = useState(null);
 
   // Load profile details if token exists
   const fetchProfile = async (authToken) => {
@@ -139,7 +141,25 @@ export default function App() {
     setView('auth');
   };
 
-  // ── Socket.IO real-time connection ─────────────────────────────────────────────
+  // ── Navigate to post from notification ────────────────────────────────────────
+  const handleNavigate = (postId, type) => {
+    // Small delay to let dropdown close animation finish
+    setTimeout(() => {
+      const el = document.getElementById(`post-${postId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      // Highlight the post card
+      setHighlightPostId(postId);
+      setTimeout(() => setHighlightPostId(null), 2200);
+
+      // Auto-open comments for comment/reply notifications
+      if (['comment', 'reply'].includes(type)) {
+        setOpenCommentPostId(postId);
+        setTimeout(() => setOpenCommentPostId(null), 500);
+      }
+    }, 80);
+  };
   useEffect(() => {
     if (!token || !user || user.partnerStatus !== 'connected') return;
 
@@ -333,7 +353,7 @@ export default function App() {
                 <RefreshCw size={18} className={refreshing ? 'animate-spin' : ''} />
               </button>
 
-              <NotificationBell apiBase={API_BASE} token={token} socket={socket} />
+              <NotificationBell apiBase={API_BASE} token={token} socket={socket} onNavigate={handleNavigate} />
 
               <button
                 onClick={handleLogout}
@@ -395,6 +415,8 @@ export default function App() {
                   onComment={handleCommentUpdate}
                   apiBase={API_BASE}
                   token={token}
+                  highlight={highlightPostId === String(post._id)}
+                  autoOpenComments={openCommentPostId === String(post._id)}
                 />
               ))
             ) : (
