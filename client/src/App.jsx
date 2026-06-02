@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { LogOut, RefreshCw, Heart, Sparkles, Camera } from 'lucide-react';
+import { LogOut, RefreshCw, Heart, Sparkles, Camera, Settings } from 'lucide-react';
 import Auth from './components/Auth';
 import ConnectPartner from './components/ConnectPartner';
 import CoupleWidget from './components/CoupleWidget';
@@ -9,6 +9,7 @@ import FloatingHearts from './components/FloatingHearts';
 import ProfileEditModal from './components/ProfileEditModal';
 import DraggableBrush from './components/DraggableBrush';
 import NotificationBell from './components/NotificationBell';
+import SettingsModal from './components/SettingsModal';
 import { connectSocket, disconnectSocket } from './socket';
 
 // Backend API URL
@@ -26,10 +27,11 @@ export default function App() {
   const [refreshing, setRefreshing] = useState(false);
   const [view, setView] = useState('auth'); // auth, connect, dashboard
   const [showProfileEdit, setShowProfileEdit] = useState(false);
-  const [socket, setSocket] = useState(null);  // socket.io instance as state → triggers re-render
-  const socketRef = useRef(null);              // ref copy for use inside event handlers (stale-closure safe)
-  const [highlightPostId, setHighlightPostId]           = useState(null);
-  const [openCommentPostId, setOpenCommentPostId]       = useState(null);
+  const [socket, setSocket] = useState(null);
+  const socketRef = useRef(null);
+  const [highlightPostId, setHighlightPostId]     = useState(null);
+  const [openCommentPostId, setOpenCommentPostId] = useState(null);
+  const [showSettings, setShowSettings]           = useState(false);
 
   // Load profile details if token exists
   const fetchProfile = async (authToken) => {
@@ -141,6 +143,21 @@ export default function App() {
     setView('auth');
   };
 
+  // ── Soft-delete post from feed ───────────────────────────────────────────
+  const handlePostDelete = (postId) => {
+    setPosts(prev => prev.filter(p => String(p._id) !== String(postId)));
+  };
+
+  // ── Restore post from trash ──────────────────────────────────────────────
+  const handlePostRestored = (post) => {
+    // Add the restored post back to feed in chronological order
+    setPosts(prev => {
+      const exists = prev.some(p => String(p._id) === String(post._id));
+      if (exists) return prev;
+      return [post, ...prev].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    });
+  };
+
   // ── Navigate to post from notification ────────────────────────────────────────
   const handleNavigate = (postId, type) => {
     // postId may be ObjectId object or string — always coerce to string
@@ -196,10 +213,16 @@ export default function App() {
       setPosts(prev => prev.map(p => p._id === postId ? { ...p, comments } : p));
     });
 
+    // Soft-delete: remove from feed in real-time
+    s.on('post:deleted', ({ postId }) => {
+      setPosts(prev => prev.filter(p => String(p._id) !== String(postId)));
+    });
+
     return () => {
       s.off('post:new');
       s.off('post:reaction');
       s.off('post:comment');
+      s.off('post:deleted');
     };
   }, [token, user?.partnerStatus]);
 
@@ -382,6 +405,15 @@ export default function App() {
 
               <NotificationBell apiBase={API_BASE} token={token} socket={socket} onNavigate={handleNavigate} />
 
+              {/* Settings gear */}
+              <button
+                onClick={() => setShowSettings(true)}
+                style={{ background: 'none', border: 'none', color: '#8c7377', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '4px' }}
+                title="Cài đặt"
+              >
+                <Settings size={18} />
+              </button>
+
               <button
                 onClick={handleLogout}
                 style={{
@@ -440,6 +472,7 @@ export default function App() {
                   currentUser={user}
                   onReact={handleReactionUpdate}
                   onComment={handleCommentUpdate}
+                  onDelete={handlePostDelete}
                   apiBase={API_BASE}
                   token={token}
                   highlight={highlightPostId === String(post._id)}
@@ -466,6 +499,16 @@ export default function App() {
           token={token}
           onUpdate={handleProfileUpdate}
           onClose={() => setShowProfileEdit(false)}
+        />
+      )}
+
+      {/* Settings Modal (Trash, etc.) */}
+      {showSettings && (
+        <SettingsModal
+          apiBase={API_BASE}
+          token={token}
+          onClose={() => setShowSettings(false)}
+          onRestored={handlePostRestored}
         />
       )}
     </div>

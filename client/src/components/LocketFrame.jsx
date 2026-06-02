@@ -1,12 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Camera, Image as ImageIcon, RotateCw, Send, X, RefreshCw } from 'lucide-react';
+import ImageCropModal from './ImageCropModal.jsx';
 
 export default function LocketFrame({ onUploadSuccess, apiBase, token }) {
-  const [imageFile, setImageFile] = useState(null);
+  const [imageFile, setImageFile]     = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
-  const [caption, setCaption] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [caption, setCaption]           = useState('');
+  const [loading, setLoading]           = useState(false);
+  const [error, setError]               = useState('');
+  const [cropSrc, setCropSrc]           = useState(null); // original src waiting for crop
   
   // Camera states
   const [cameraMode, setCameraMode] = useState(false);
@@ -98,15 +100,28 @@ export default function LocketFrame({ onUploadSuccess, apiBase, token }) {
     }, 'image/jpeg', 0.9);
   };
 
-  // Handle file select from gallery
+  // Handle file select from gallery — show crop modal first
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      setImageFile(file);
-      setImagePreview(URL.createObjectURL(file));
       stopCamera();
       setCameraMode(false);
+      // Store the original file URL so ImageCropModal can display it
+      setCropSrc(URL.createObjectURL(file));
     }
+    // Reset input so same file can be re-selected
+    e.target.value = '';
+  };
+
+  // Called when crop is confirmed
+  const handleCropConfirm = (croppedFile) => {
+    setImageFile(croppedFile);
+    setImagePreview(URL.createObjectURL(croppedFile));
+    setCropSrc(null);
+  };
+
+  const handleCropCancel = () => {
+    setCropSrc(null);
   };
 
   // Upload to server
@@ -155,6 +170,15 @@ export default function LocketFrame({ onUploadSuccess, apiBase, token }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', marginBottom: '24px' }}>
+
+      {/* Crop modal — shown before preview */}
+      {cropSrc && (
+        <ImageCropModal
+          src={cropSrc}
+          onConfirm={handleCropConfirm}
+          onCancel={handleCropCancel}
+        />
+      )}
       
       {error && (
         <div className="sweet-alert sweet-alert-error" style={{ width: '100%' }}>

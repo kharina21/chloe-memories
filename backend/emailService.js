@@ -8,8 +8,23 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-const BRAND = 'Chloe Memories 💕';
-const PINK  = '#ff6b8b';
+const BRAND   = 'Chloe Memories 💕';
+const PINK    = '#ff6b8b';
+const APP_URL = process.env.APP_URL || 'https://chloe-memories.onrender.com';
+
+// ── Clickable "Mở app" button ──────────────────────────────────────────────
+const openAppBtn = (label = 'Mở app ngay 💕') =>
+  `<div style="text-align:center;margin-top:24px;">
+    <a href="${APP_URL}" target="_blank"
+      style="display:inline-block;background:linear-gradient(135deg,${PINK},#ff477e);color:#fff;
+             text-decoration:none;font-weight:800;font-size:15px;padding:14px 32px;
+             border-radius:50px;box-shadow:0 4px 16px rgba(255,107,139,0.45);letter-spacing:0.3px;">
+      ${label}
+    </a>
+    <p style="margin:10px 0 0;font-size:12px;color:#8c7377;">
+      Hoặc truy cập: <a href="${APP_URL}" style="color:${PINK};">${APP_URL}</a>
+    </p>
+  </div>`;
 
 // ── Base HTML wrapper ──────────────────────────────────────────────────────
 const htmlWrap = (bodyContent) => `
@@ -40,7 +55,7 @@ const htmlWrap = (bodyContent) => `
         <!-- Footer -->
         <tr>
           <td style="background:#fff0f2;padding:20px 32px;text-align:center;border-top:1px solid #ffd3da;">
-            <p style="margin:0;font-size:12px;color:#8c7377;">Email này được gửi tự động từ ${BRAND}.<br>Đừng trả lời email này nhé 💌</p>
+            <p style="margin:0;font-size:12px;color:#8c7377;">Email này được gửi tự động từ ${BRAND}.<br>Nhấn nút bên trên để trả lời ngay trong app 💌</p>
           </td>
         </tr>
       </table>
@@ -68,6 +83,7 @@ export const sendBrushEmail = async (toEmail, fromName) => {
       <div style="background:linear-gradient(135deg,#fff0f2,#fffdf0);border-radius:16px;padding:16px;text-align:center;border:1px solid #ffd3da;">
         <p style="margin:0;font-size:13px;color:#8c7377;">🕐 Thông báo này sẽ không lặp lại trong 5 phút tiếp theo</p>
       </div>
+      ${openAppBtn('Trả lời ngay 🪥')}
     `),
   });
 };
@@ -89,7 +105,7 @@ export const sendPostEmail = async (toEmail, fromName, userStatus, imageUrl) => 
         ${userStatus ? `<div style="display:inline-block;background:#fff0f2;border:1px solid #ffd3da;border-radius:20px;padding:8px 16px;margin:8px 0;font-size:14px;color:#ff6b8b;font-weight:600;">💬 "${userStatus}"</div>` : ''}
       </div>
       ${imgSection}
-      <p style="text-align:center;font-size:14px;color:#4a373b;margin:16px 0 0;">Mở app ngay để xem và phản ứng nhé! ❤️</p>
+      ${openAppBtn('Xem ảnh & phản hồi 📸')}
     `),
   });
 };
@@ -112,7 +128,7 @@ export const sendCommentEmail = async (toEmail, fromName, commentText, isReply =
         <p style="margin:0;font-size:15px;color:#4a373b;font-style:italic;">"${commentText}"</p>
         <p style="margin:6px 0 0;font-size:12px;color:#8c7377;">— ${fromName}</p>
       </div>
-      <p style="text-align:center;font-size:14px;color:#4a373b;margin:16px 0 0;">Mở app để trả lời nhé! 💕</p>
+      ${openAppBtn('Trả lời ngay 💬')}
     `),
   });
 };
@@ -133,6 +149,7 @@ export const sendOtpEmail = async (toEmail, otp) => {
         <p style="margin:0;font-size:36px;font-weight:900;color:#ffffff;letter-spacing:8px;">${otp}</p>
       </div>
       <p style="text-align:center;font-size:13px;color:#8c7377;margin:12px 0 0;">⏰ Mã này có hiệu lực trong <strong>10 phút</strong></p>
+      ${openAppBtn('Mở app để nhập mã 🔐')}
     `),
   });
 };

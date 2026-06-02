@@ -397,29 +397,200 @@ app.post('/api/posts/upload', authenticateToken, upload.single('image'), async (
   }
 });
 
-// Get Feed (posts shared between user and partner)
+// Get Feed (posts shared between user and partner, excluding deleted)
 app.get('/api/posts/feed', authenticateToken, async (req, res) => {
   try {
     if (!req.user.partnerId || req.user.partnerStatus !== 'connected') {
       return res.json([]);
     }
-
-    // Find all posts where:
-    // (sender is User AND recipient is Partner) OR (sender is Partner AND recipient is User)
     const posts = await Post.find({
       $or: [
         { sender: req.user._id, recipient: req.user.partnerId },
         { sender: req.user.partnerId, recipient: req.user._id }
-      ]
+      ],
+      isDeleted: { $ne: true }   // ← exclude soft-deleted
     })
       .sort({ createdAt: -1 })
       .populate('sender', 'username displayName avatarUrl');
-
     res.json(posts);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Lỗi máy chủ' });
   }
+});
+
+// ─── Trash: soft-delete a post ───────────────────────────────────────────
+app.delete('/api/posts/:postId', authenticateToken, async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.postId);
+    if (!post) return res.status(404).json({ message: 'Không tìm thấy bài đăng' });
+    if (String(post.sender) !== String(req.user._id))
+      return res.status(403).json({ message: 'Bạn không có quyền xóa bài này' });
+    post.isDeleted = true;
+    post.deletedAt = new Date();
+    await post.save();
+    if (req.user.partnerId) {
+      const ids = [String(req.user._id), String(req.user.partnerId)].sort();
+      io.to(`couple:${ids[0]}_${ids[1]}`).emit('post:deleted', { postId: post._id });
+    }
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Lỗi máy chủ' }); }
+});
+
+// ─── Trash: get trashed posts ─────────────────────────────────────────────
+app.get('/api/posts/trash', authenticateToken, async (req, res) => {
+  try {
+    if (!req.user.partnerId) return res.json([]);
+    const posts = await Post.find({
+      $or: [
+        { sender: req.user._id, recipient: req.user.partnerId },
+        { sender: req.user.partnerId, recipient: req.user._id }
+      ],
+      isDeleted: true
+    })
+      .sort({ deletedAt: -1 })
+      .populate('sender', 'username displayName avatarUrl');
+    res.json(posts);
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Lỗi máy chủ' }); }
+});
+
+// ─── Trash: restore a post ────────────────────────────────────────────────
+app.put('/api/posts/:postId/restore', authenticateToken, async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.postId);
+    if (!post) return res.status(404).json({ message: 'Không tìm thấy bài đăng' });
+    if (String(post.sender) !== String(req.user._id))
+      return res.status(403).json({ message: 'Bạn không có quyền khôi phục bài này' });
+    post.isDeleted = false;
+    post.deletedAt = null;
+    await post.save();
+    const restored = await Post.findById(post._id).populate('sender', 'username displayName avatarUrl');
+    if (req.user.partnerId) {
+      const ids = [String(req.user._id), String(req.user.partnerId)].sort();
+      io.to(`couple:${ids[0]}_${ids[1]}`).emit('post:new', restored);
+    }
+    res.json(restored);
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Lỗi máy chủ' }); }
+});
+
+// ─── Edit a comment ───────────────────────────────────────────────────────
+app.put('/api/posts/:postId/comments/:commentId', authenticateToken, async (req, res) => {
+  try {
+    const { text } = req.body;
+    const post = await Post.findById(req.params.postId);
+    if (!post) return res.status(404).json({ message: 'Không tìm thấy bài đăng' });
+    const comment = post.comments.id(req.params.commentId);
+    if (!comment) return res.status(404).json({ message: 'Không tìm thấy bình luận' });
+    if (String(comment.userId) !== String(req.user._id))
+      return res.status(403).json({ message: 'Không có quyền sửa' });
+    comment.text = (text || '').trim();
+    comment.editedAt = new Date();
+    await post.save();
+    if (req.user.partnerId) {
+      const ids = [String(req.user._id), String(req.user.partnerId)].sort();
+      io.to(`couple:${ids[0]}_${ids[1]}`).emit('post:comment', { postId: post._id, comments: post.comments });
+    }
+    res.json(post.comments);
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Lỗi máy chủ' }); }
+});
+
+// ─── Delete a comment ─────────────────────────────────────────────────────
+app.delete('/api/posts/:postId/comments/:commentId', authenticateToken, async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.postId);
+    if (!post) return res.status(404).json({ message: 'Không tìm thấy bài đăng' });
+    const comment = post.comments.id(req.params.commentId);
+    if (!comment) return res.status(404).json({ message: 'Không tìm thấy bình luận' });
+    if (String(comment.userId) !== String(req.user._id))
+      return res.status(403).json({ message: 'Không có quyền xóa' });
+    comment.deleted = true;
+    comment.text = '[Đã xóa]';
+    await post.save();
+    if (req.user.partnerId) {
+      const ids = [String(req.user._id), String(req.user.partnerId)].sort();
+      io.to(`couple:${ids[0]}_${ids[1]}`).emit('post:comment', { postId: post._id, comments: post.comments });
+    }
+    res.json(post.comments);
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Lỗi máy chủ' }); }
+});
+
+// ─── Reply to a reply (flat model: adds to same replies array) ────────────
+app.post('/api/posts/:postId/comments/:commentId/replies/:replyId/reply', authenticateToken, upload.single('image'), async (req, res) => {
+  try {
+    const { text } = req.body;
+    const { postId, commentId, replyId } = req.params;
+    const post = await Post.findById(postId);
+    if (!post) return res.status(404).json({ message: 'Không tìm thấy bài đăng' });
+    const comment = post.comments.id(commentId);
+    if (!comment) return res.status(404).json({ message: 'Không tìm thấy bình luận' });
+    const targetReply = comment.replies.id(replyId);
+
+    let imageUrl = '';
+    if (req.file) {
+      const result = await uploadToCloudinary(req.file.buffer, 'thoiu-comments');
+      imageUrl = result.secure_url;
+    }
+    comment.replies.push({
+      userId:             req.user._id,
+      displayName:        req.user.displayName,
+      text:               (text || '').trim(),
+      imageUrl,
+      replyToDisplayName: targetReply?.displayName || '',
+    });
+    await post.save();
+    if (req.user.partnerId) {
+      const ids = [String(req.user._id), String(req.user.partnerId)].sort();
+      io.to(`couple:${ids[0]}_${ids[1]}`).emit('post:comment', { postId: post._id, comments: post.comments });
+    }
+    res.json(post.comments);
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Lỗi máy chủ' }); }
+});
+
+// ─── Edit a reply ─────────────────────────────────────────────────────────
+app.put('/api/posts/:postId/comments/:commentId/replies/:replyId', authenticateToken, async (req, res) => {
+  try {
+    const { text } = req.body;
+    const { postId, commentId, replyId } = req.params;
+    const post = await Post.findById(postId);
+    if (!post) return res.status(404).json({ message: 'Không tìm thấy bài đăng' });
+    const comment = post.comments.id(commentId);
+    if (!comment) return res.status(404).json({ message: 'Không tìm thấy bình luận' });
+    const reply = comment.replies.id(replyId);
+    if (!reply) return res.status(404).json({ message: 'Không tìm thấy trả lời' });
+    if (String(reply.userId) !== String(req.user._id))
+      return res.status(403).json({ message: 'Không có quyền sửa' });
+    reply.text = (text || '').trim();
+    reply.editedAt = new Date();
+    await post.save();
+    if (req.user.partnerId) {
+      const ids = [String(req.user._id), String(req.user.partnerId)].sort();
+      io.to(`couple:${ids[0]}_${ids[1]}`).emit('post:comment', { postId: post._id, comments: post.comments });
+    }
+    res.json(post.comments);
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Lỗi máy chủ' }); }
+});
+
+// ─── Delete a reply ───────────────────────────────────────────────────────
+app.delete('/api/posts/:postId/comments/:commentId/replies/:replyId', authenticateToken, async (req, res) => {
+  try {
+    const { postId, commentId, replyId } = req.params;
+    const post = await Post.findById(postId);
+    if (!post) return res.status(404).json({ message: 'Không tìm thấy bài đăng' });
+    const comment = post.comments.id(commentId);
+    if (!comment) return res.status(404).json({ message: 'Không tìm thấy bình luận' });
+    const reply = comment.replies.id(replyId);
+    if (!reply) return res.status(404).json({ message: 'Không tìm thấy trả lời' });
+    if (String(reply.userId) !== String(req.user._id))
+      return res.status(403).json({ message: 'Không có quyền xóa' });
+    reply.deleted = true;
+    reply.text = '[Đã xóa]';
+    await post.save();
+    if (req.user.partnerId) {
+      const ids = [String(req.user._id), String(req.user.partnerId)].sort();
+      io.to(`couple:${ids[0]}_${ids[1]}`).emit('post:comment', { postId: post._id, comments: post.comments });
+    }
+    res.json(post.comments);
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Lỗi máy chủ' }); }
 });
 
 // React to Post

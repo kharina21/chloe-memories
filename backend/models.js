@@ -79,12 +79,15 @@ const CommentReactionSchema = new mongoose.Schema({
 
 // ── Reply subdoc ─────────────────────────────────────────────
 const ReplySchema = new mongoose.Schema({
-  userId:      { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  displayName: { type: String, required: true },
-  text:        { type: String, default: '' },
-  imageUrl:    { type: String, default: '' },
-  reactions:   [CommentReactionSchema],
-  createdAt:   { type: Date, default: Date.now }
+  userId:              { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  displayName:         { type: String, required: true },
+  text:                { type: String, default: '' },
+  imageUrl:            { type: String, default: '' },
+  reactions:           [CommentReactionSchema],
+  replyToDisplayName:  { type: String, default: '' }, // @mention when replying to a reply
+  deleted:             { type: Boolean, default: false },
+  editedAt:            { type: Date, default: null },
+  createdAt:           { type: Date, default: Date.now }
 });
 
 // ── Comment subdoc ───────────────────────────────────────────
@@ -95,6 +98,8 @@ const CommentSchema = new mongoose.Schema({
   imageUrl:    { type: String, default: '' },
   reactions:   [CommentReactionSchema],
   replies:     [ReplySchema],
+  deleted:     { type: Boolean, default: false },
+  editedAt:    { type: Date, default: null },
   createdAt:   { type: Date, default: Date.now }
 });
 
@@ -125,7 +130,10 @@ const PostSchema = new mongoose.Schema({
       createdAt: { type: Date, default: Date.now }
     }
   ],
-  comments: [CommentSchema]
+  comments: [CommentSchema],
+  // ─ Soft delete (Trash) ───────────────────────────────────────
+  isDeleted: { type: Boolean, default: false },
+  deletedAt: { type: Date, default: null },
 }, { timestamps: true });
 
 // ── Notification ─────────────────────────────────────────────
