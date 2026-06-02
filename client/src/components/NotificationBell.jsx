@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bell, X, Heart, MessageCircle, Image, CornerDownRight, CheckCheck } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Bell, X, CheckCheck } from 'lucide-react';
 
 const TYPE_ICON = {
   post:     '📸',
@@ -117,8 +118,8 @@ export default function NotificationBell({ apiBase, token, socket }) {
         )}
       </button>
 
-      {/* Dropdown */}
-      {open && (
+      {/* Dropdown — rendered via Portal directly on body to bypass parent stacking context */}
+      {open && createPortal(
         <div
           className="glass-card animate-scale-in"
           style={{
@@ -128,7 +129,7 @@ export default function NotificationBell({ apiBase, token, socket }) {
             left: '16px',
             maxWidth: '400px',
             margin: '0 auto',
-            zIndex: 20000,
+            zIndex: 99999,
             padding: 0,
             overflow: 'hidden',
             maxHeight: '70vh',
@@ -216,7 +217,7 @@ export default function NotificationBell({ apiBase, token, socket }) {
             ))}
           </div>
         </div>
-      )}
+      , document.body)}
     </div>
   );
 }
