@@ -146,6 +146,7 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
       username: user.username,
       displayName: user.displayName,
       avatarUrl: user.avatarUrl,
+      backgroundUrl: user.backgroundUrl,
       partnerId: user.partnerId,
       partnerStatus: user.partnerStatus,
       currentStatus: user.currentStatus,
@@ -437,6 +438,56 @@ app.put('/api/user/anniversary', authenticateToken, async (req, res) => {
     }
 
     res.json({ anniversaryDate: req.user.anniversaryDate });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Lỗi máy chủ' });
+  }
+});
+
+// Update Avatar
+app.put('/api/user/avatar', authenticateToken, upload.single('avatar'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'Vui lòng chọn ảnh đại diện' });
+    }
+
+    let uploadResult;
+    try {
+      uploadResult = await uploadToCloudinary(req.file.buffer, 'thoiu-avatars');
+    } catch (uploadErr) {
+      console.error('Avatar upload error:', uploadErr);
+      return res.status(500).json({ message: 'Lỗi tải ảnh lên Cloudinary' });
+    }
+
+    req.user.avatarUrl = uploadResult.secure_url;
+    await req.user.save();
+
+    res.json({ avatarUrl: req.user.avatarUrl });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Lỗi máy chủ' });
+  }
+});
+
+// Update Background Image
+app.put('/api/user/background', authenticateToken, upload.single('background'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'Vui lòng chọn ảnh nền' });
+    }
+
+    let uploadResult;
+    try {
+      uploadResult = await uploadToCloudinary(req.file.buffer, 'thoiu-backgrounds');
+    } catch (uploadErr) {
+      console.error('Background upload error:', uploadErr);
+      return res.status(500).json({ message: 'Lỗi tải ảnh nền lên Cloudinary' });
+    }
+
+    req.user.backgroundUrl = uploadResult.secure_url;
+    await req.user.save();
+
+    res.json({ backgroundUrl: req.user.backgroundUrl });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Lỗi máy chủ' });

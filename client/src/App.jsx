@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { LogOut, RefreshCw, Heart, Sparkles } from 'lucide-react';
+import { LogOut, RefreshCw, Heart, Sparkles, Camera } from 'lucide-react';
 import Auth from './components/Auth';
 import ConnectPartner from './components/ConnectPartner';
 import CoupleWidget from './components/CoupleWidget';
 import LocketFrame from './components/LocketFrame';
 import MomentCard from './components/MomentCard';
 import FloatingHearts from './components/FloatingHearts';
+import ProfileEditModal from './components/ProfileEditModal';
 
 // Backend API URL
 // Production (Render 1-service): same origin, use '' (relative)
@@ -21,6 +22,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [view, setView] = useState('auth'); // auth, connect, dashboard
+  const [showProfileEdit, setShowProfileEdit] = useState(false);
 
   // Load profile details if token exists
   const fetchProfile = async (authToken) => {
@@ -162,6 +164,10 @@ export default function App() {
     setUser(prev => ({ ...prev, currentStatus: newStatus }));
   };
 
+  const handleProfileUpdate = ({ avatarUrl, backgroundUrl }) => {
+    setUser(prev => ({ ...prev, avatarUrl, backgroundUrl }));
+  };
+
   if (loading) {
     return (
       <div className="app-container" style={{ justifyContent: 'center', alignItems: 'center' }}>
@@ -177,6 +183,21 @@ export default function App() {
     <div className="app-container">
       {/* Wind-blown floating hearts background effect */}
       <FloatingHearts />
+
+      {/* User background image — fixed, blurred, semi-transparent */}
+      {user?.backgroundUrl && (
+        <div style={{
+          position: 'fixed', inset: 0,
+          backgroundImage: `url(${user.backgroundUrl})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          zIndex: -2,
+          filter: 'blur(12px) brightness(1.05)',
+          transform: 'scale(1.08)', // avoid blur edge artifact
+          opacity: 0.22,
+        }} />
+      )}
+
       {/* Dynamic Background Elements */}
       <div style={{
         position: 'fixed',
@@ -225,7 +246,28 @@ export default function App() {
           
           {/* Header Panel */}
           <div className="glass-card" style={{ padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {/* Avatar + Edit button */}
+              <div
+                onClick={() => setShowProfileEdit(true)}
+                title="Chỉnh sửa hồ sơ"
+                style={{
+                  width: '34px', height: '34px', borderRadius: '50%',
+                  border: '2px solid #ffd3da',
+                  overflow: 'hidden', cursor: 'pointer',
+                  background: user.avatarUrl ? 'transparent' : 'linear-gradient(135deg, #ffd3da, #fff3c4)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  flexShrink: 0,
+                  transition: 'border-color 0.2s',
+                }}
+                onMouseOver={(e) => e.currentTarget.style.borderColor = '#ff6b8b'}
+                onMouseOut={(e) => e.currentTarget.style.borderColor = '#ffd3da'}
+              >
+                {user.avatarUrl
+                  ? <img src={user.avatarUrl} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  : <Camera size={14} color="#ff6b8b" />
+                }
+              </div>
               <Heart size={20} fill="#ff6b8b" color="#ff6b8b" />
               <span style={{ fontSize: '1.15rem', fontWeight: 800, color: '#ff6b8b' }}>Chloe Memories 💕</span>
             </div>
@@ -319,6 +361,17 @@ export default function App() {
             )}
           </div>
         </div>
+      )}
+
+      {/* Profile Edit Modal */}
+      {showProfileEdit && user && (
+        <ProfileEditModal
+          user={user}
+          apiBase={API_BASE}
+          token={token}
+          onUpdate={handleProfileUpdate}
+          onClose={() => setShowProfileEdit(false)}
+        />
       )}
     </div>
   );

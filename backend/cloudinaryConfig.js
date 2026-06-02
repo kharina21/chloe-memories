@@ -21,11 +21,11 @@ const upload = multer({
  * @param {Buffer} fileBuffer The file buffer from multer memory storage
  * @returns {Promise<object>} The Cloudinary response object
  */
-const uploadToCloudinary = (fileBuffer) => {
+const uploadToCloudinary = (fileBuffer, folder = 'thoiu-locket') => {
   return new Promise((resolve, reject) => {
     const uploadStream = cloudinary.uploader.upload_stream(
       {
-        folder: 'thoiu-locket',
+        folder,
         transformation: [{ width: 800, crop: 'limit', quality: 'auto' }]
       },
       (error, result) => {

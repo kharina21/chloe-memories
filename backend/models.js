@@ -20,6 +20,10 @@ const UserSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  backgroundUrl: {
+    type: String,
+    default: ''
+  },
   partnerId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
