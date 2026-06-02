@@ -463,8 +463,8 @@ app.put('/api/user/anniversary', authenticateToken, async (req, res) => {
 const clientDist = path.join(__dirname, '..', 'client', 'dist');
 if (fs.existsSync(clientDist)) {
   app.use(express.static(clientDist));
-  // SPA fallback — all non-API routes serve index.html
-  app.get('*', (req, res) => {
+  // SPA fallback — Express 5 compatible (no bare '*' wildcard)
+  app.use((req, res) => {
     if (req.path.startsWith('/api')) {
       return res.status(404).json({ message: 'API route not found' });
     }
