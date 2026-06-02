@@ -12,6 +12,43 @@ const BRAND   = 'Chloe Memories 💕';
 const PINK    = '#ff6b8b';
 const APP_URL = process.env.APP_URL || 'https://chloe-memories.onrender.com';
 
+// Generic mail sender that supports Brevo HTTP API (production on Render.com Free tier)
+// and falls back to Gmail SMTP (local development)
+const sendMail = async ({ to, subject, html }) => {
+  if (process.env.BREVO_API_KEY) {
+    const senderEmail = process.env.EMAIL_USER || 'kharrr2001@gmail.com';
+    const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'accept': 'application/json',
+        'api-key': process.env.BREVO_API_KEY,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        sender: {
+          name: BRAND,
+          email: senderEmail,
+        },
+        to: [{ email: to }],
+        subject: subject,
+        htmlContent: html,
+      }),
+    });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.message || `Brevo API error: ${res.statusText}`);
+    }
+    return await res.json();
+  } else {
+    return await transporter.sendMail({
+      from: `"${BRAND}" <${process.env.EMAIL_USER}>`,
+      to,
+      subject,
+      html,
+    });
+  }
+};
+
 // ── Clickable "Mở app" button ──────────────────────────────────────────────
 const openAppBtn = (label = 'Mở app ngay 💕') =>
   `<div style="text-align:center;margin-top:24px;">
@@ -67,8 +104,7 @@ const htmlWrap = (bodyContent) => `
 // ── Email: brush notification ──────────────────────────────────────────────
 export const sendBrushEmail = async (toEmail, fromName) => {
   if (!toEmail) return;
-  await transporter.sendMail({
-    from: `"${BRAND}" <${process.env.EMAIL_USER}>`,
+  await sendMail({
     to: toEmail,
     subject: `🪥 ${fromName} đang gọi bạn!`,
     html: htmlWrap(`
@@ -94,8 +130,7 @@ export const sendPostEmail = async (toEmail, fromName, userStatus, imageUrl) => 
   const imgSection = imageUrl
     ? `<div style="margin:16px 0;border-radius:16px;overflow:hidden;"><img src="${imageUrl}" alt="post" style="width:100%;display:block;max-height:280px;object-fit:cover;"></div>`
     : '';
-  await transporter.sendMail({
-    from: `"${BRAND}" <${process.env.EMAIL_USER}>`,
+  await sendMail({
     to: toEmail,
     subject: `📸 ${fromName} vừa đăng ảnh mới cho bạn!`,
     html: htmlWrap(`
@@ -113,8 +148,7 @@ export const sendPostEmail = async (toEmail, fromName, userStatus, imageUrl) => 
 // ── Email: new comment / reply notification ────────────────────────────────
 export const sendCommentEmail = async (toEmail, fromName, commentText, isReply = false) => {
   if (!toEmail) return;
-  await transporter.sendMail({
-    from: `"${BRAND}" <${process.env.EMAIL_USER}>`,
+  await sendMail({
     to: toEmail,
     subject: `💬 ${fromName} ${isReply ? 'đã trả lời bình luận của bạn' : 'đã bình luận vào ảnh của bạn'}!`,
     html: htmlWrap(`
@@ -135,8 +169,7 @@ export const sendCommentEmail = async (toEmail, fromName, commentText, isReply =
 
 // ── Email: OTP verification ────────────────────────────────────────────────
 export const sendOtpEmail = async (toEmail, otp) => {
-  await transporter.sendMail({
-    from: `"${BRAND}" <${process.env.EMAIL_USER}>`,
+  await sendMail({
     to: toEmail,
     subject: `🔐 Mã xác thực email — ${BRAND}`,
     html: htmlWrap(`
