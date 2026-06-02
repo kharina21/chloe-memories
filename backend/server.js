@@ -9,9 +9,16 @@ import mongoose from 'mongoose';
 import cors from 'cors';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
 
 import { User, Post } from './models.js';
 import { upload, uploadToCloudinary } from './cloudinaryConfig.js';
+
+// __dirname for ES Modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -451,6 +458,20 @@ app.put('/api/user/anniversary', authenticateToken, async (req, res) => {
     res.status(500).json({ message: 'Lỗi máy chủ' });
   }
 });
+
+// ── Serve React build in production (same pattern as AcquyThanhtu) ──────────
+const clientDist = path.join(__dirname, '..', 'client', 'dist');
+if (fs.existsSync(clientDist)) {
+  app.use(express.static(clientDist));
+  // SPA fallback — all non-API routes serve index.html
+  app.get('*', (req, res) => {
+    if (req.path.startsWith('/api')) {
+      return res.status(404).json({ message: 'API route not found' });
+    }
+    res.sendFile(path.join(clientDist, 'index.html'));
+  });
+  console.log(`📦 Serving React build from: ${clientDist}`);
+}
 
 // Start Server
 app.listen(PORT, () => {

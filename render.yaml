@@ -1,50 +1,32 @@
-# render.yaml — Render Blueprint for Chloe Memories
-# Docs: https://render.com/docs/blueprint-spec
+# render.yaml — Chloe Memories (1 Web Service: backend serves API + React build)
+# Cùng 1 URL cho cả frontend lẫn backend — giống pattern AcquyThanhtu
 
 services:
-  # ─────────────────────────────────────────────
-  # Backend — Node.js / Express Web Service
-  # ─────────────────────────────────────────────
   - type: web
-    name: chloe-memories-api
+    name: chloe-memories
     runtime: node
-    rootDir: backend
-    buildCommand: npm install
-    startCommand: npm start
+    region: singapore
+
+    # Build: build React client trước, rồi cài backend deps
+    buildCommand: cd client && npm install && npm run build && cd ../backend && npm install
+
+    # Start: chạy Express — sẽ serve API + client/dist
+    startCommand: cd backend && node server.js
+
     plan: free
+
     envVars:
       - key: NODE_ENV
         value: production
-      - key: PORT
-        value: 10000
-      - key: MONGO_URI
-        sync: false          # set manually in Render dashboard
-      - key: JWT_SECRET
-        sync: false          # set manually in Render dashboard
-      - key: CLOUDINARY_CLOUD_NAME
-        sync: false          # set manually in Render dashboard
-      - key: CLOUDINARY_API_KEY
-        sync: false          # set manually in Render dashboard
-      - key: CLOUDINARY_API_SECRET
-        sync: false          # set manually in Render dashboard
-      - key: CLIENT_URL
-        sync: false          # set to your frontend URL after first deploy
-
-  # ─────────────────────────────────────────────
-  # Frontend — React / Vite Static Site
-  # ─────────────────────────────────────────────
-  - type: web
-    name: chloe-memories
-    runtime: static
-    rootDir: client
-    buildCommand: npm install && npm run build
-    staticPublishPath: dist
-    plan: free
-    routes:
-      # SPA fallback — redirect all routes to index.html
-      - type: rewrite
-        source: /*
-        destination: /index.html
-    envVars:
       - key: VITE_API_BASE
-        sync: false          # set to your backend URL, e.g. https://chloe-memories-api.onrender.com
+        value: ""              # Empty string = dùng relative /api trên cùng domain
+      - key: MONGO_URI
+        sync: false            # Điền trong Render dashboard
+      - key: JWT_SECRET
+        sync: false            # Điền trong Render dashboard
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false            # Điền trong Render dashboard
+      - key: CLOUDINARY_API_KEY
+        sync: false            # Điền trong Render dashboard
+      - key: CLOUDINARY_API_SECRET
+        sync: false            # Điền trong Render dashboard
