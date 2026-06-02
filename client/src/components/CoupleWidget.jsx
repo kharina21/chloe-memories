@@ -97,21 +97,21 @@ export default function CoupleWidget({ user, onUpdateAnniversary, onUpdateStatus
           {/* User A */}
           <div style={{ textAlign: 'center' }}>
             <div style={{
-              width: '50px',
-              height: '50px',
+              width: '56px',
+              height: '56px',
               borderRadius: '50%',
-              backgroundColor: '#ffffd0',
-              border: '2px solid #ff6b8b',
-              color: '#ff6b8b',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontWeight: 800,
-              fontSize: '1.2rem',
-              boxShadow: '0 4px 8px rgba(0,0,0,0.05)',
-              margin: '0 auto 6px'
+              border: '2.5px solid #ff6b8b',
+              overflow: 'hidden',
+              boxShadow: '0 4px 10px rgba(255,107,139,0.2)',
+              margin: '0 auto 6px',
+              background: user.avatarUrl ? 'transparent' : '#ffffd0',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontWeight: 800, fontSize: '1.2rem', color: '#ff6b8b',
             }}>
-              {user.displayName.charAt(0).toUpperCase()}
+              {user.avatarUrl
+                ? <img src={user.avatarUrl} alt={user.displayName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                : user.displayName.charAt(0).toUpperCase()
+              }
             </div>
             <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#ff6b8b' }}>{user.displayName}</span>
           </div>
@@ -124,21 +124,21 @@ export default function CoupleWidget({ user, onUpdateAnniversary, onUpdateStatus
           {/* User B (Partner) */}
           <div style={{ textAlign: 'center' }}>
             <div style={{
-              width: '50px',
-              height: '50px',
+              width: '56px',
+              height: '56px',
               borderRadius: '50%',
-              backgroundColor: '#fff0f2',
-              border: '2px solid #e6a100',
-              color: '#e6a100',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontWeight: 800,
-              fontSize: '1.2rem',
-              boxShadow: '0 4px 8px rgba(0,0,0,0.05)',
-              margin: '0 auto 6px'
+              border: '2.5px solid #e6a100',
+              overflow: 'hidden',
+              boxShadow: '0 4px 10px rgba(230,161,0,0.15)',
+              margin: '0 auto 6px',
+              background: (user.partnerId?.avatarUrl) ? 'transparent' : '#fff0f2',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontWeight: 800, fontSize: '1.2rem', color: '#e6a100',
             }}>
-              {user.partnerId ? user.partnerId.displayName.charAt(0).toUpperCase() : '?'}
+              {user.partnerId?.avatarUrl
+                ? <img src={user.partnerId.avatarUrl} alt={user.partnerId.displayName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                : (user.partnerId ? user.partnerId.displayName.charAt(0).toUpperCase() : '?')
+              }
             </div>
             <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#e6a100' }}>
               {user.partnerId ? user.partnerId.displayName : 'Người yêu'}
