@@ -319,8 +319,24 @@ export default function App() {
       {view === 'dashboard' && user && (
         <div style={{ display: 'flex', flexDirection: 'column', width: '100%', gap: '16px' }}>
           
-          {/* Header Panel */}
-          <div className="glass-card" style={{ padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+          {/* Header Panel — sticky so bell & controls stay visible while scrolling */}
+          <div
+            className="glass-card"
+            style={{
+              padding: '14px 18px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '8px',
+              position: 'sticky',
+              top: '0px',
+              zIndex: 9000,
+              backdropFilter: 'blur(20px)',
+              WebkitBackdropFilter: 'blur(20px)',
+              background: 'rgba(255,255,255,0.82)',
+              boxShadow: '0 2px 20px rgba(255,107,139,0.12)',
+            }}
+          >
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               {/* Avatar + Edit button */}
               <div

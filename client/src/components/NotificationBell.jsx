@@ -21,13 +21,23 @@ function timeAgo(dateStr) {
 }
 
 export default function NotificationBell({ apiBase, token, socket, onNavigate }) {
-  const [notifs, setNotifs]   = useState([]);
-  const [open, setOpen]       = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [notifs, setNotifs]     = useState([]);
+  const [open, setOpen]         = useState(false);
+  const [loading, setLoading]   = useState(false);
+  const [newPing, setNewPing]   = useState(false); // pulse animation on new notif
+  const [scrolled, setScrolled] = useState(false); // show FAB when scrolled down
+
   const dropRef = useRef(null);   // bell button wrapper
   const menuRef = useRef(null);   // portal dropdown — lives outside dropRef in DOM
 
   const unread = notifs.filter(n => !n.read).length;
+
+  // ── Track scroll position ────────────────────────────────────
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.pageYOffset > 80);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   // ── Fetch notifications ──────────────────────────────────────
   const fetchNotifs = async () => {
@@ -44,21 +54,24 @@ export default function NotificationBell({ apiBase, token, socket, onNavigate })
 
   useEffect(() => {
     fetchNotifs();
-    const id = setInterval(fetchNotifs, 15000); // poll every 15s
+    const id = setInterval(fetchNotifs, 15000);
     return () => clearInterval(id);
   }, [token]);
 
-  // Real-time socket event
+  // ── Real-time socket event ───────────────────────────────────
   useEffect(() => {
     if (!socket) return;
     const onNew = (notif) => {
       setNotifs(prev => [notif, ...prev]);
+      // Trigger pulse animation on FAB
+      setNewPing(true);
+      setTimeout(() => setNewPing(false), 3000);
     };
     socket.on('notification:new', onNew);
     return () => socket.off('notification:new', onNew);
   }, [socket]);
 
-  // Click outside → close
+  // ── Click outside → close ────────────────────────────────────
   // IMPORTANT: menuRef must also be checked because the portal lives at document.body,
   // NOT inside dropRef — without this, every click inside the dropdown triggers close
   useEffect(() => {
@@ -88,146 +101,188 @@ export default function NotificationBell({ apiBase, token, socket, onNavigate })
     });
   };
 
-  return (
-    <div ref={dropRef} style={{ position: 'relative' }}>
-      {/* Bell button */}
-      <button
-        onClick={() => { setOpen(o => !o); if (!open) fetchNotifs(); }}
-        style={{
-          position: 'relative',
-          background: 'none', border: 'none', cursor: 'pointer',
-          color: '#8c7377', padding: '4px',
-          display: 'flex', alignItems: 'center',
-        }}
-        title="Thông báo"
-      >
-        <Bell size={20} color={unread > 0 ? '#ff6b8b' : '#8c7377'} />
-        {unread > 0 && (
-          <span style={{
-            position: 'absolute',
-            top: '-2px', right: '-2px',
-            background: '#ff6b8b',
-            color: '#fff',
-            fontSize: '10px',
-            fontWeight: 800,
-            minWidth: '16px', height: '16px',
-            borderRadius: '8px',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            padding: '0 3px',
-            lineHeight: 1,
-          }}>
-            {unread > 9 ? '9+' : unread}
-          </span>
-        )}
-      </button>
+  // ── Dropdown panel (shared between header bell and FAB) ──────
+  const dropdown = open && createPortal(
+    <div
+      ref={menuRef}
+      className="glass-card animate-scale-in"
+      style={{
+        position: 'fixed',
+        top: '64px',
+        right: '16px',
+        left: '16px',
+        maxWidth: '400px',
+        margin: '0 auto',
+        zIndex: 99999,
+        padding: 0,
+        overflow: 'hidden',
+        maxHeight: '70vh',
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
+      {/* Header */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '14px 16px',
+        borderBottom: '1px solid rgba(255,107,139,0.12)',
+        flexShrink: 0,
+      }}>
+        <span style={{ fontWeight: 800, color: '#ff6b8b', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <Bell size={16} /> Thông báo {unread > 0 && <span style={{ background: '#ff6b8b', color: '#fff', borderRadius: '10px', padding: '1px 7px', fontSize: '0.75rem' }}>{unread}</span>}
+        </span>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          {unread > 0 && (
+            <button onClick={markAllRead}
+              style={{ background: 'none', border: 'none', color: '#8c7377', fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <CheckCheck size={14} /> Đọc tất cả
+            </button>
+          )}
+          <button onClick={() => setOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8c7377' }}>
+            <X size={18} />
+          </button>
+        </div>
+      </div>
 
-      {/* Dropdown — rendered via Portal directly on body to bypass parent stacking context */}
-      {open && createPortal(
-        <div
-          ref={menuRef}
-          className="glass-card animate-scale-in"
+      {/* List */}
+      <div style={{ overflowY: 'auto', flex: 1 }}>
+        {loading && notifs.length === 0 && (
+          <div style={{ padding: '24px', textAlign: 'center', color: '#8c7377', fontSize: '0.85rem' }}>Đang tải...</div>
+        )}
+        {!loading && notifs.length === 0 && (
+          <div style={{ padding: '32px', textAlign: 'center' }}>
+            <Bell size={32} color="#ffd3da" style={{ marginBottom: '8px' }} />
+            <p style={{ color: '#8c7377', fontSize: '0.85rem' }}>Chưa có thông báo nào</p>
+          </div>
+        )}
+        {notifs.map(n => (
+          <div
+            key={n._id}
+            onClick={() => {
+              markRead(n._id);
+              if (n.postId) {
+                setOpen(false);
+                onNavigate?.(n.postId, n.type);
+              }
+            }}
+            style={{
+              display: 'flex', alignItems: 'flex-start', gap: '12px',
+              padding: '12px 16px',
+              background: n.read ? 'transparent' : 'rgba(255,107,139,0.06)',
+              borderBottom: '1px solid rgba(255,107,139,0.07)',
+              cursor: 'pointer',
+              transition: 'background 0.2s',
+            }}
+            onMouseOver={e => e.currentTarget.style.background = 'rgba(255,107,139,0.1)'}
+            onMouseOut={e => e.currentTarget.style.background = n.read ? 'transparent' : 'rgba(255,107,139,0.06)'}
+          >
+            <div style={{
+              width: '38px', height: '38px', borderRadius: '50%',
+              border: '2px solid #ffd3da',
+              overflow: 'hidden', flexShrink: 0,
+              background: 'linear-gradient(135deg, #ffd3da, #fff3c4)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '18px',
+            }}>
+              {n.fromUser?.avatarUrl
+                ? <img src={n.fromUser.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                : TYPE_ICON[n.type] || '💕'
+              }
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ margin: 0, fontSize: '0.875rem', color: '#4a373b', lineHeight: 1.4 }}>{n.message}</p>
+              <p style={{ margin: '3px 0 0', fontSize: '0.75rem', color: '#8c7377' }}>{timeAgo(n.createdAt)}</p>
+            </div>
+            {!n.read && (
+              <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ff6b8b', flexShrink: 0, marginTop: '4px' }} />
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  , document.body);
+
+  // ── Bell button (used in header) ─────────────────────────────
+  const bellButton = (
+    <button
+      onClick={() => { setOpen(o => !o); if (!open) fetchNotifs(); setNewPing(false); }}
+      style={{
+        position: 'relative',
+        background: 'none', border: 'none', cursor: 'pointer',
+        color: '#8c7377', padding: '4px',
+        display: 'flex', alignItems: 'center',
+      }}
+      title="Thông báo"
+    >
+      <Bell size={20} color={unread > 0 ? '#ff6b8b' : '#8c7377'} />
+      {unread > 0 && (
+        <span style={{
+          position: 'absolute', top: '-2px', right: '-2px',
+          background: '#ff6b8b', color: '#fff',
+          fontSize: '10px', fontWeight: 800,
+          minWidth: '16px', height: '16px', borderRadius: '8px',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '0 3px', lineHeight: 1,
+        }}>
+          {unread > 9 ? '9+' : unread}
+        </span>
+      )}
+    </button>
+  );
+
+  return (
+    <>
+      {/* ── Header bell (always visible in sticky header) ── */}
+      <div ref={dropRef} style={{ position: 'relative' }}>
+        {bellButton}
+        {dropdown}
+      </div>
+
+      {/* ── Floating bell FAB (appears when scrolled down) ── */}
+      {scrolled && createPortal(
+        <button
+          onClick={() => { setOpen(o => !o); if (!open) fetchNotifs(); setNewPing(false); }}
           style={{
             position: 'fixed',
-            top: '64px',
+            bottom: '84px',   // above the batman brush area
             right: '16px',
-            left: '16px',
-            maxWidth: '400px',
-            margin: '0 auto',
-            zIndex: 99999,
-            padding: 0,
-            overflow: 'hidden',
-            maxHeight: '70vh',
+            width: '48px',
+            height: '48px',
+            borderRadius: '50%',
+            background: unread > 0
+              ? 'linear-gradient(135deg, #ff6b8b, #ff477e)'
+              : 'rgba(255,255,255,0.92)',
+            border: '2px solid #ffd3da',
+            boxShadow: newPing
+              ? '0 0 0 6px rgba(255,107,139,0.25), 0 4px 20px rgba(255,107,139,0.45)'
+              : '0 4px 20px rgba(255,107,139,0.25)',
+            cursor: 'pointer',
             display: 'flex',
-            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9998,
+            transition: 'all 0.3s ease',
+            animation: newPing ? 'fabPulse 0.6s ease-in-out 3' : 'none',
           }}
+          title="Thông báo"
         >
-          {/* Header */}
-          <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '14px 16px',
-            borderBottom: '1px solid rgba(255,107,139,0.12)',
-            flexShrink: 0,
-          }}>
-            <span style={{ fontWeight: 800, color: '#ff6b8b', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Bell size={16} /> Thông báo {unread > 0 && <span style={{ background: '#ff6b8b', color: '#fff', borderRadius: '10px', padding: '1px 7px', fontSize: '0.75rem' }}>{unread}</span>}
+          <Bell size={20} color={unread > 0 ? '#fff' : '#ff6b8b'} />
+          {unread > 0 && (
+            <span style={{
+              position: 'absolute', top: '-4px', right: '-4px',
+              background: '#fff', color: '#ff6b8b',
+              fontSize: '10px', fontWeight: 900,
+              minWidth: '18px', height: '18px', borderRadius: '9px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: '0 3px', lineHeight: 1,
+              border: '1.5px solid #ffd3da',
+              boxShadow: '0 2px 6px rgba(255,107,139,0.3)',
+            }}>
+              {unread > 9 ? '9+' : unread}
             </span>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              {unread > 0 && (
-                <button
-                  onClick={markAllRead}
-                  style={{ background: 'none', border: 'none', color: '#8c7377', fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
-                >
-                  <CheckCheck size={14} /> Đọc tất cả
-                </button>
-              )}
-              <button onClick={() => setOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8c7377' }}>
-                <X size={18} />
-              </button>
-            </div>
-          </div>
-
-          {/* List */}
-          <div style={{ overflowY: 'auto', flex: 1 }}>
-            {loading && notifs.length === 0 && (
-              <div style={{ padding: '24px', textAlign: 'center', color: '#8c7377', fontSize: '0.85rem' }}>Đang tải...</div>
-            )}
-            {!loading && notifs.length === 0 && (
-              <div style={{ padding: '32px', textAlign: 'center' }}>
-                <Bell size={32} color="#ffd3da" style={{ marginBottom: '8px' }} />
-                <p style={{ color: '#8c7377', fontSize: '0.85rem' }}>Chưa có thông báo nào</p>
-              </div>
-            )}
-            {notifs.map(n => (
-              <div
-                key={n._id}
-                onClick={() => {
-                  markRead(n._id);
-                  if (n.postId) {
-                    setOpen(false);
-                    onNavigate?.(n.postId, n.type);
-                  }
-                }}
-                style={{
-                  display: 'flex', alignItems: 'flex-start', gap: '12px',
-                  padding: '12px 16px',
-                  background: n.read ? 'transparent' : 'rgba(255,107,139,0.06)',
-                  borderBottom: '1px solid rgba(255,107,139,0.07)',
-                  cursor: 'pointer',
-                  transition: 'background 0.2s',
-                }}
-                onMouseOver={e => e.currentTarget.style.background = 'rgba(255,107,139,0.1)'}
-                onMouseOut={e => e.currentTarget.style.background = n.read ? 'transparent' : 'rgba(255,107,139,0.06)'}
-              >
-                {/* Avatar or icon */}
-                <div style={{
-                  width: '38px', height: '38px', borderRadius: '50%',
-                  border: '2px solid #ffd3da',
-                  overflow: 'hidden', flexShrink: 0,
-                  background: 'linear-gradient(135deg, #ffd3da, #fff3c4)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '18px',
-                }}>
-                  {n.fromUser?.avatarUrl
-                    ? <img src={n.fromUser.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    : TYPE_ICON[n.type] || '💕'
-                  }
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ margin: 0, fontSize: '0.875rem', color: '#4a373b', lineHeight: 1.4 }}>
-                    {n.message}
-                  </p>
-                  <p style={{ margin: '3px 0 0', fontSize: '0.75rem', color: '#8c7377' }}>
-                    {timeAgo(n.createdAt)}
-                  </p>
-                </div>
-                {!n.read && (
-                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ff6b8b', flexShrink: 0, marginTop: '4px' }} />
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
+          )}
+        </button>
       , document.body)}
-    </div>
+    </>
   );
 }
