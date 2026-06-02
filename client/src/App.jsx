@@ -25,7 +25,8 @@ export default function App() {
   const [refreshing, setRefreshing] = useState(false);
   const [view, setView] = useState('auth'); // auth, connect, dashboard
   const [showProfileEdit, setShowProfileEdit] = useState(false);
-  const socketRef = useRef(null);
+  const [socket, setSocket] = useState(null);  // socket.io instance as state → triggers re-render
+  const socketRef = useRef(null);              // ref copy for use inside event handlers (stale-closure safe)
 
   // Load profile details if token exists
   const fetchProfile = async (authToken) => {
@@ -130,6 +131,7 @@ export default function App() {
     localStorage.removeItem('thoiu_token');
     disconnectSocket();
     socketRef.current = null;
+    setSocket(null);
     setToken(null);
     setUser(null);
     setPosts([]);
@@ -140,11 +142,12 @@ export default function App() {
   useEffect(() => {
     if (!token || !user || user.partnerStatus !== 'connected') return;
 
-    const socket = connectSocket(token);
-    socketRef.current = socket;
+    const s = connectSocket(token);
+    socketRef.current = s;
+    setSocket(s);   // ← triggers re-render so DraggableBrush receives the real socket
 
     // New post from partner
-    socket.on('post:new', (newPost) => {
+    s.on('post:new', (newPost) => {
       setPosts(prev => {
         if (prev.some(p => p._id === newPost._id)) return prev; // dedupe
         return [newPost, ...prev];
@@ -152,19 +155,19 @@ export default function App() {
     });
 
     // Reaction update
-    socket.on('post:reaction', ({ postId, reactions }) => {
+    s.on('post:reaction', ({ postId, reactions }) => {
       setPosts(prev => prev.map(p => p._id === postId ? { ...p, reactions } : p));
     });
 
     // Comment update
-    socket.on('post:comment', ({ postId, comments }) => {
+    s.on('post:comment', ({ postId, comments }) => {
       setPosts(prev => prev.map(p => p._id === postId ? { ...p, comments } : p));
     });
 
     return () => {
-      socket.off('post:new');
-      socket.off('post:reaction');
-      socket.off('post:comment');
+      s.off('post:new');
+      s.off('post:reaction');
+      s.off('post:comment');
     };
   }, [token, user?.partnerStatus]);
 
@@ -236,7 +239,7 @@ export default function App() {
       )}
 
       {/* Batman brush — draggable & pinch-zoomable, synced via socket */}
-      <DraggableBrush src="/banchaibatman.png" initialWidth={160} socket={socketRef.current} />
+      <DraggableBrush src="/banchaibatman.png" initialWidth={160} socket={socket} />
 
       {/* Dynamic Background Elements */}
       <div style={{
