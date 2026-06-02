@@ -161,7 +161,7 @@ export default function MomentCard({ post, currentUser, onReact, onComment, apiB
   // ── Render ─────────────────────────────────────────────────
   return (
     <div
-      id={`post-${post._id}`}
+      id={`post-${String(post._id)}`}
       ref={cardRef}
       className="glass-card animate-fade-in"
       style={{

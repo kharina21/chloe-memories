@@ -143,22 +143,33 @@ export default function App() {
 
   // ── Navigate to post from notification ────────────────────────────────────────
   const handleNavigate = (postId, type) => {
-    // Small delay to let dropdown close animation finish
-    setTimeout(() => {
-      const el = document.getElementById(`post-${postId}`);
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-      // Highlight the post card
-      setHighlightPostId(postId);
-      setTimeout(() => setHighlightPostId(null), 2200);
+    // postId may be ObjectId object or string — always coerce to string
+    const pid = String(postId?._id ?? postId);
+    if (!pid || pid === 'undefined' || pid === 'null') return;
 
-      // Auto-open comments for comment/reply notifications
-      if (['comment', 'reply'].includes(type)) {
-        setOpenCommentPostId(postId);
-        setTimeout(() => setOpenCommentPostId(null), 500);
+    // Open comments immediately for comment/reply types
+    if (['comment', 'reply'].includes(type)) {
+      setOpenCommentPostId(pid);
+      setTimeout(() => setOpenCommentPostId(null), 800);
+    }
+
+    // Highlight
+    setHighlightPostId(pid);
+    setTimeout(() => setHighlightPostId(null), 2500);
+
+    // Scroll — give React time to re-render + portal to close
+    setTimeout(() => {
+      const el = document.getElementById(`post-${pid}`);
+      if (el) {
+        // Reliable cross-browser scroll: offset by fixed header height (~70px)
+        const top = el.getBoundingClientRect().top + window.pageYOffset - 80;
+        window.scrollTo({ top, behavior: 'smooth' });
+      } else {
+        // last resort: try querySelector
+        const el2 = document.querySelector(`[id^="post-${pid}"]`);
+        if (el2) el2.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
-    }, 80);
+    }, 300);
   };
   useEffect(() => {
     if (!token || !user || user.partnerStatus !== 'connected') return;
@@ -408,7 +419,7 @@ export default function App() {
             {posts.length > 0 ? (
               posts.map((post) => (
                 <MomentCard
-                  key={post._id}
+                  key={String(post._id)}
                   post={post}
                   currentUser={user}
                   onReact={handleReactionUpdate}
