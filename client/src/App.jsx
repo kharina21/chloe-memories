@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { LogOut, RefreshCw, Heart, Sparkles, Camera } from 'lucide-react';
 import Auth from './components/Auth';
 import ConnectPartner from './components/ConnectPartner';
@@ -8,6 +8,7 @@ import MomentCard from './components/MomentCard';
 import FloatingHearts from './components/FloatingHearts';
 import ProfileEditModal from './components/ProfileEditModal';
 import DraggableBrush from './components/DraggableBrush';
+import { connectSocket, disconnectSocket } from './socket';
 
 // Backend API URL
 // Production (Render 1-service): same origin, use '' (relative)
@@ -24,6 +25,7 @@ export default function App() {
   const [refreshing, setRefreshing] = useState(false);
   const [view, setView] = useState('auth'); // auth, connect, dashboard
   const [showProfileEdit, setShowProfileEdit] = useState(false);
+  const socketRef = useRef(null);
 
   // Load profile details if token exists
   const fetchProfile = async (authToken) => {
@@ -126,11 +128,45 @@ export default function App() {
 
   const handleLogout = () => {
     localStorage.removeItem('thoiu_token');
+    disconnectSocket();
+    socketRef.current = null;
     setToken(null);
     setUser(null);
     setPosts([]);
     setView('auth');
   };
+
+  // ── Socket.IO real-time connection ─────────────────────────────────────────────
+  useEffect(() => {
+    if (!token || !user || user.partnerStatus !== 'connected') return;
+
+    const socket = connectSocket(token);
+    socketRef.current = socket;
+
+    // New post from partner
+    socket.on('post:new', (newPost) => {
+      setPosts(prev => {
+        if (prev.some(p => p._id === newPost._id)) return prev; // dedupe
+        return [newPost, ...prev];
+      });
+    });
+
+    // Reaction update
+    socket.on('post:reaction', ({ postId, reactions }) => {
+      setPosts(prev => prev.map(p => p._id === postId ? { ...p, reactions } : p));
+    });
+
+    // Comment update
+    socket.on('post:comment', ({ postId, comments }) => {
+      setPosts(prev => prev.map(p => p._id === postId ? { ...p, comments } : p));
+    });
+
+    return () => {
+      socket.off('post:new');
+      socket.off('post:reaction');
+      socket.off('post:comment');
+    };
+  }, [token, user?.partnerStatus]);
 
   const handlePartnerConnectChange = (newStatus, partnerData) => {
     setUser(prev => {
@@ -199,8 +235,8 @@ export default function App() {
         }} />
       )}
 
-      {/* Batman brush — draggable & pinch-zoomable */}
-      <DraggableBrush src="/banchaibatman.png" initialWidth={160} />
+      {/* Batman brush — draggable & pinch-zoomable, synced via socket */}
+      <DraggableBrush src="/banchaibatman.png" initialWidth={160} socket={socketRef.current} />
 
       {/* Dynamic Background Elements */}
       <div style={{

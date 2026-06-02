@@ -4,7 +4,9 @@ dns.setServers(['8.8.8.8', '8.8.4.4']);
 import dotenv from 'dotenv';
 dotenv.config();
 
+import { createServer } from 'http';
 import express from 'express';
+import { Server as SocketServer } from 'socket.io';
 import mongoose from 'mongoose';
 import cors from 'cors';
 import bcrypt from 'bcryptjs';
@@ -21,8 +23,53 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+const httpServer = createServer(app);
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'supersecretlovetoken12345';
+
+// ── Socket.IO setup ────────────────────────────────────────────────────────
+export const io = new SocketServer(httpServer, {
+  cors: { origin: true, credentials: true },
+  transports: ['websocket', 'polling'],
+});
+
+// Socket auth middleware — verify JWT and attach user
+io.use(async (socket, next) => {
+  try {
+    const token = socket.handshake.auth?.token;
+    if (!token) return next(new Error('No token'));
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const user = await User.findById(decoded.userId);
+    if (!user) return next(new Error('User not found'));
+    socket.user = user;
+    next();
+  } catch (err) {
+    next(new Error('Auth failed'));
+  }
+});
+
+// On socket connect — join couple room
+io.on('connection', (socket) => {
+  const user = socket.user;
+  // Room name = sorted pair of IDs (both partners share same room)
+  if (user.partnerId && user.partnerStatus === 'connected') {
+    const ids = [String(user._id), String(user.partnerId)].sort();
+    socket.roomId = `couple:${ids[0]}_${ids[1]}`;
+    socket.join(socket.roomId);
+    console.log(`💞 ${user.displayName} joined room ${socket.roomId}`);
+  }
+
+  // Brush position relay — throttle handled on client
+  socket.on('brush:move', (data) => {
+    if (socket.roomId) {
+      socket.to(socket.roomId).emit('brush:move', data);
+    }
+  });
+
+  socket.on('disconnect', () => {
+    console.log(`💔 ${user.displayName} disconnected`);
+  });
+});
 
 // CORS — open for all origins (frontend served from same Express in production)
 // Middlewares
@@ -285,6 +332,10 @@ app.post('/api/posts/upload', authenticateToken, upload.single('image'), async (
     const populatedPost = await Post.findById(post._id)
       .populate('sender', 'username displayName avatarUrl');
 
+    // 🔔 Notify partner in real-time
+    const ids = [String(req.user._id), String(req.user.partnerId)].sort();
+    io.to(`couple:${ids[0]}_${ids[1]}`).emit('post:new', populatedPost);
+
     res.status(201).json(populatedPost);
   } catch (err) {
     console.error(err);
@@ -355,6 +406,13 @@ app.post('/api/posts/:postId/react', authenticateToken, async (req, res) => {
     }
 
     await post.save();
+
+    // 🔔 Notify couple room in real-time
+    if (req.user.partnerId) {
+      const ids = [String(req.user._id), String(req.user.partnerId)].sort();
+      io.to(`couple:${ids[0]}_${ids[1]}`).emit('post:reaction', { postId: post._id, reactions: post.reactions });
+    }
+
     res.json(post.reactions);
   } catch (err) {
     console.error(err);
@@ -385,6 +443,12 @@ app.post('/api/posts/:postId/comment', authenticateToken, async (req, res) => {
 
     post.comments.push(newComment);
     await post.save();
+
+    // 🔔 Notify couple room in real-time
+    if (req.user.partnerId) {
+      const ids = [String(req.user._id), String(req.user.partnerId)].sort();
+      io.to(`couple:${ids[0]}_${ids[1]}`).emit('post:comment', { postId: post._id, comments: post.comments });
+    }
 
     res.json(post.comments);
   } catch (err) {
@@ -509,6 +573,6 @@ if (fs.existsSync(clientDist)) {
 }
 
 // Start Server
-app.listen(PORT, () => {
+httpServer.listen(PORT, () => {
   console.log(`Server is running beautifully on port ${PORT}! 🌸`);
 });
