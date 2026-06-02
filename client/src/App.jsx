@@ -24,6 +24,7 @@ export default function App() {
 
   // Load profile details if token exists
   const fetchProfile = async (authToken) => {
+    setLoading(true); // show spinner instead of blank screen during transition
     try {
       const res = await fetch(`${API_BASE}/api/auth/me`, {
         headers: { 'Authorization': `Bearer ${authToken}` }
@@ -112,16 +113,12 @@ export default function App() {
     return () => clearInterval(interval);
   }, [token, view]);
 
-  const handleAuthSuccess = (newToken, userData) => {
+  const handleAuthSuccess = (newToken) => {
+    // Only store token — useEffect([token]) will trigger fetchProfile
+    // which sets user + view correctly. This avoids the race condition
+    // where view='dashboard' but user=null causes a white screen.
     localStorage.setItem('thoiu_token', newToken);
     setToken(newToken);
-    setUser(userData);
-    if (userData.partnerStatus === 'connected') {
-      setView('dashboard');
-      fetchFeed(newToken);
-    } else {
-      setView('connect');
-    }
   };
 
   const handleLogout = () => {
