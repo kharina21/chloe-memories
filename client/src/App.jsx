@@ -7,6 +7,7 @@ import LocketFrame from './components/LocketFrame';
 import MomentCard from './components/MomentCard';
 import FloatingHearts from './components/FloatingHearts';
 import ProfileEditModal from './components/ProfileEditModal';
+import DraggableBrush from './components/DraggableBrush';
 
 // Backend API URL
 // Production (Render 1-service): same origin, use '' (relative)
@@ -198,22 +199,8 @@ export default function App() {
         }} />
       )}
 
-      {/* Corner decoration — bottom-left */}
-      <img
-        src="/banchaibatman.png"
-        alt=""
-        aria-hidden="true"
-        style={{
-          position: 'fixed',
-          bottom: 0,
-          left: 0,
-          width: '160px',
-          pointerEvents: 'none',
-          zIndex: 9997,
-          opacity: 0.92,
-          animation: 'fadeIn 1.2s ease-out forwards',
-        }}
-      />
+      {/* Batman brush — draggable & pinch-zoomable */}
+      <DraggableBrush src="/banchaibatman.png" initialWidth={160} />
 
       {/* Dynamic Background Elements */}
       <div style={{
