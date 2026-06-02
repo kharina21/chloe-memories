@@ -200,7 +200,7 @@ export default function App() {
 
       {/* Corner decoration — bottom-left */}
       <img
-        src="/corner-girl.png"
+        src="/banchaibatman.png"
         alt=""
         aria-hidden="true"
         style={{
