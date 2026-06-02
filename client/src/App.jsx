@@ -8,9 +8,11 @@ import MomentCard from './components/MomentCard';
 import FloatingHearts from './components/FloatingHearts';
 
 // Backend API URL
-// Production (Render 1-service): VITE_API_BASE = '' (empty) so calls go to /api/* on same domain
-// Dev: falls back to http://localhost:5000
-const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:5000';
+// Production (Render 1-service): same origin, use '' (relative)
+// Dev: http://localhost:5000
+const API_BASE = window.location.hostname === 'localhost'
+  ? 'http://localhost:5000'
+  : ''; // same domain in production
 
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem('thoiu_token') || null);

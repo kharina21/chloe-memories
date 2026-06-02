@@ -24,25 +24,9 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'supersecretlovetoken12345';
 
-// CORS — allow localhost in dev + Render frontend URL in production
-const allowedOrigins = [
-  'http://localhost:5173',
-  'http://localhost:4173',
-  process.env.CLIENT_URL, // set this in Render: e.g. https://chloe-memories.onrender.com
-].filter(Boolean);
-
+// CORS — open for all origins (frontend served from same Express in production)
 // Middlewares
-app.use(cors({
-  origin: (origin, callback) => {
-    // Allow requests with no origin (Postman, curl, etc.) or from whitelist
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error(`CORS policy blocked: ${origin}`));
-    }
-  },
-  credentials: true,
-}));
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 
 // MongoDB Connection
