@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { X, Camera, Image, User, Check, Loader } from 'lucide-react';
+import { X, Camera, Image, User, Check, Loader, Mail, ShieldCheck } from 'lucide-react';
 
 export default function ProfileEditModal({ user, apiBase, token, onUpdate, onClose }) {
   const [avatarPreview, setAvatarPreview] = useState(user.avatarUrl || null);
@@ -9,6 +9,13 @@ export default function ProfileEditModal({ user, apiBase, token, onUpdate, onClo
   const [uploading, setUploading]         = useState(false);
   const [error, setError]                 = useState('');
   const [success, setSuccess]             = useState(false);
+  // Email
+  const [emailInput, setEmailInput]       = useState(user.email || '');
+  const [emailVerified, setEmailVerified] = useState(user.emailVerified || false);
+  const [otpInput, setOtpInput]           = useState('');
+  const [otpSent, setOtpSent]             = useState(false);
+  const [emailLoading, setEmailLoading]   = useState(false);
+  const [emailMsg, setEmailMsg]           = useState('');
 
   const avatarInputRef = useRef();
   const bgInputRef     = useRef();
@@ -25,6 +32,42 @@ export default function ProfileEditModal({ user, apiBase, token, onUpdate, onClo
     if (!file) return;
     setBgFile(file);
     setBgPreview(URL.createObjectURL(file));
+  };
+
+  const handleSendOtp = async () => {
+    if (!emailInput.includes('@')) { setEmailMsg('Email không hợp lệ'); return; }
+    setEmailLoading(true); setEmailMsg('');
+    try {
+      const res = await fetch(`${apiBase}/api/user/email/send-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ email: emailInput }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message);
+      setOtpSent(true);
+      setEmailMsg('📨 Mã OTP đã được gửi! Kiểm tra hộp thư của bạn.');
+    } catch (err) { setEmailMsg(err.message); }
+    finally { setEmailLoading(false); }
+  };
+
+  const handleConfirmOtp = async () => {
+    if (!otpInput || otpInput.length < 6) { setEmailMsg('Vui lòng nhập mã 6 chữ số'); return; }
+    setEmailLoading(true); setEmailMsg('');
+    try {
+      const res = await fetch(`${apiBase}/api/user/email/confirm-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ otp: otpInput }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message);
+      setEmailVerified(true);
+      setOtpSent(false);
+      setOtpInput('');
+      setEmailMsg('✅ ' + data.message);
+    } catch (err) { setEmailMsg(err.message); }
+    finally { setEmailLoading(false); }
   };
 
   const handleSave = async () => {
@@ -205,6 +248,58 @@ export default function ProfileEditModal({ user, apiBase, token, onUpdate, onClo
             style={{ display: 'none' }}
             onChange={handleBgChange}
           />
+        </div>
+
+        <hr style={{ border: 'none', borderTop: '1px solid rgba(255,107,139,0.12)', margin: '0 0 20px' }} />
+
+        {/* ── Email Verification ── */}
+        <div style={{ marginBottom: '24px' }}>
+          <p style={{ fontSize: '0.82rem', color: '#8c7377', fontWeight: 600, marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Mail size={14} /> Email nhận thông báo
+            {emailVerified && <span style={{ background: '#f1fcf4', color: '#27ae60', border: '1px solid #d4f5e0', borderRadius: '10px', padding: '2px 8px', fontSize: '0.72rem', fontWeight: 700 }}><ShieldCheck size={10} style={{ display: 'inline', marginRight: '3px' }} />Xác thực</span>}
+          </p>
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+            <input
+              type="email"
+              placeholder="email@gmail.com"
+              value={emailInput}
+              onChange={e => { setEmailInput(e.target.value); setEmailVerified(false); setOtpSent(false); setEmailMsg(''); }}
+              style={{ padding: '10px 14px', fontSize: '0.9rem', borderRadius: '12px', flex: 1 }}
+            />
+            <button
+              className="btn-secondary"
+              onClick={handleSendOtp}
+              disabled={emailLoading || !emailInput}
+              style={{ padding: '10px 12px', borderRadius: '12px', fontSize: '0.82rem', whiteSpace: 'nowrap' }}
+            >
+              {emailLoading && !otpSent ? <Loader size={14} className="animate-spin" /> : (otpSent ? 'Gửi lại' : 'Gửi mã')}
+            </button>
+          </div>
+          {otpSent && (
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <input
+                type="text"
+                placeholder="Nhập mã 6 số"
+                value={otpInput}
+                onChange={e => setOtpInput(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                maxLength={6}
+                style={{ padding: '10px 14px', fontSize: '1.1rem', borderRadius: '12px', letterSpacing: '6px', textAlign: 'center', flex: 1 }}
+              />
+              <button
+                className="btn-primary"
+                onClick={handleConfirmOtp}
+                disabled={emailLoading || otpInput.length < 6}
+                style={{ padding: '10px 12px', borderRadius: '12px', fontSize: '0.82rem' }}
+              >
+                {emailLoading ? <Loader size={14} className="animate-spin" /> : <Check size={14} />}
+              </button>
+            </div>
+          )}
+          {emailMsg && (
+            <p style={{ marginTop: '8px', fontSize: '0.8rem', color: emailMsg.startsWith('✅') || emailMsg.startsWith('📨') ? '#27ae60' : '#d63031' }}>
+              {emailMsg}
+            </p>
+          )}
         </div>
 
         {/* Error / Success */}

@@ -24,6 +24,29 @@ const UserSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  // ── Email verification ──────────────────────────────────────
+  email: {
+    type: String,
+    default: ''
+  },
+  emailVerified: {
+    type: Boolean,
+    default: false
+  },
+  emailOtp: {
+    type: String,
+    default: null
+  },
+  emailOtpExpires: {
+    type: Date,
+    default: null
+  },
+  // Cooldown: last time we sent a brush email (to throttle)
+  lastBrushEmailAt: {
+    type: Date,
+    default: null
+  },
+  // ── Partner ─────────────────────────────────────────────────
   partnerId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
@@ -48,6 +71,34 @@ const UserSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
+// ── Comment Reaction subdoc ──────────────────────────────────
+const CommentReactionSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  emoji:  { type: String, required: true },
+}, { _id: false });
+
+// ── Reply subdoc ─────────────────────────────────────────────
+const ReplySchema = new mongoose.Schema({
+  userId:      { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  displayName: { type: String, required: true },
+  text:        { type: String, default: '' },
+  imageUrl:    { type: String, default: '' },
+  reactions:   [CommentReactionSchema],
+  createdAt:   { type: Date, default: Date.now }
+});
+
+// ── Comment subdoc ───────────────────────────────────────────
+const CommentSchema = new mongoose.Schema({
+  userId:      { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  displayName: { type: String, required: true },
+  text:        { type: String, default: '' },
+  imageUrl:    { type: String, default: '' },
+  reactions:   [CommentReactionSchema],
+  replies:     [ReplySchema],
+  createdAt:   { type: Date, default: Date.now }
+});
+
+// ── Post ─────────────────────────────────────────────────────
 const PostSchema = new mongoose.Schema({
   sender: {
     type: mongoose.Schema.Types.ObjectId,
@@ -69,45 +120,26 @@ const PostSchema = new mongoose.Schema({
   },
   reactions: [
     {
-      userId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
-        required: true
-      },
-      emoji: {
-        type: String,
-        required: true
-      },
-      createdAt: {
-        type: Date,
-        default: Date.now
-      }
+      userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+      emoji:  { type: String, required: true },
+      createdAt: { type: Date, default: Date.now }
     }
   ],
-  comments: [
-    {
-      userId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
-        required: true
-      },
-      displayName: {
-        type: String,
-        required: true
-      },
-      text: {
-        type: String,
-        required: true
-      },
-      createdAt: {
-        type: Date,
-        default: Date.now
-      }
-    }
-  ]
+  comments: [CommentSchema]
 }, { timestamps: true });
 
-const User = mongoose.model('User', UserSchema);
-const Post = mongoose.model('Post', PostSchema);
+// ── Notification ─────────────────────────────────────────────
+const NotificationSchema = new mongoose.Schema({
+  toUser:    { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  fromUser:  { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  type:      { type: String, enum: ['post', 'comment', 'reply', 'reaction', 'brush'], required: true },
+  postId:    { type: mongoose.Schema.Types.ObjectId, ref: 'Post', default: null },
+  message:   { type: String, required: true },
+  read:      { type: Boolean, default: false },
+}, { timestamps: true });
 
-export { User, Post };
+const User         = mongoose.model('User', UserSchema);
+const Post         = mongoose.model('Post', PostSchema);
+const Notification = mongoose.model('Notification', NotificationSchema);
+
+export { User, Post, Notification };

@@ -15,8 +15,9 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 
-import { User, Post } from './models.js';
+import { User, Post, Notification } from './models.js';
 import { upload, uploadToCloudinary } from './cloudinaryConfig.js';
+import { sendBrushEmail, sendPostEmail, sendCommentEmail, sendOtpEmail } from './emailService.js';
 
 // __dirname for ES Modules
 const __filename = fileURLToPath(import.meta.url);
@@ -48,25 +49,56 @@ io.use(async (socket, next) => {
   }
 });
 
+// Track online users: userId (string) -> socket.id
+const onlineUsers = new Map();
+export const isOnline = (userId) => onlineUsers.has(String(userId));
+
 // On socket connect — join couple room
 io.on('connection', (socket) => {
   const user = socket.user;
-  // Room name = sorted pair of IDs (both partners share same room)
+  const userId = String(user._id);
+
+  // Register as online
+  onlineUsers.set(userId, socket.id);
+
+  // Room name = sorted pair of IDs
   if (user.partnerId && user.partnerStatus === 'connected') {
-    const ids = [String(user._id), String(user.partnerId)].sort();
+    const ids = [userId, String(user.partnerId)].sort();
     socket.roomId = `couple:${ids[0]}_${ids[1]}`;
     socket.join(socket.roomId);
     console.log(`💞 ${user.displayName} joined room ${socket.roomId}`);
   }
 
-  // Brush position relay — throttle handled on client
-  socket.on('brush:move', (data) => {
+  // Brush position relay + email cooldown
+  socket.on('brush:move', async (data) => {
+    // Relay to partner
     if (socket.roomId) {
       socket.to(socket.roomId).emit('brush:move', data);
+    }
+
+    // Email notification — only if partner is OFFLINE and cooldown passed
+    if (user.partnerId && user.partnerStatus === 'connected' && !isOnline(String(user.partnerId))) {
+      try {
+        const freshUser = await User.findById(user._id);
+        const now = Date.now();
+        const FIVE_MIN = 5 * 60 * 1000;
+        if (!freshUser.lastBrushEmailAt || (now - new Date(freshUser.lastBrushEmailAt).getTime()) > FIVE_MIN) {
+          const partner = await User.findById(user.partnerId);
+          if (partner?.email && partner?.emailVerified) {
+            await sendBrushEmail(partner.email, freshUser.displayName);
+            freshUser.lastBrushEmailAt = new Date();
+            await freshUser.save();
+            console.log(`📧 Brush email sent to ${partner.email}`);
+          }
+        }
+      } catch (err) {
+        console.error('Brush email error:', err.message);
+      }
     }
   });
 
   socket.on('disconnect', () => {
+    onlineUsers.delete(userId);
     console.log(`💔 ${user.displayName} disconnected`);
   });
 });
@@ -194,6 +226,8 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
       displayName: user.displayName,
       avatarUrl: user.avatarUrl,
       backgroundUrl: user.backgroundUrl,
+      email: user.email,
+      emailVerified: user.emailVerified,
       partnerId: user.partnerId,
       partnerStatus: user.partnerStatus,
       currentStatus: user.currentStatus,
@@ -332,9 +366,29 @@ app.post('/api/posts/upload', authenticateToken, upload.single('image'), async (
     const populatedPost = await Post.findById(post._id)
       .populate('sender', 'username displayName avatarUrl');
 
-    // 🔔 Notify partner in real-time
+    // 🔔 Real-time socket
     const ids = [String(req.user._id), String(req.user.partnerId)].sort();
     io.to(`couple:${ids[0]}_${ids[1]}`).emit('post:new', populatedPost);
+
+    // 🔔 Create notification for partner
+    const notif = await Notification.create({
+      toUser:   req.user.partnerId,
+      fromUser: req.user._id,
+      type:     'post',
+      postId:   post._id,
+      message:  `${req.user.displayName} vừa đăng ảnh mới cho bạn! 📸`,
+    });
+    io.to(`couple:${ids[0]}_${ids[1]}`).emit('notification:new', notif);
+
+    // 🔔 Email if partner offline
+    if (!isOnline(String(req.user.partnerId))) {
+      try {
+        const partner = await User.findById(req.user.partnerId);
+        if (partner?.email && partner?.emailVerified) {
+          await sendPostEmail(partner.email, req.user.displayName, req.user.currentStatus, populatedPost.imageUrl);
+        }
+      } catch (emailErr) { console.error('Post email error:', emailErr.message); }
+    }
 
     res.status(201).json(populatedPost);
   } catch (err) {
@@ -420,34 +474,146 @@ app.post('/api/posts/:postId/react', authenticateToken, async (req, res) => {
   }
 });
 
-// Comment on Post
-app.post('/api/posts/:postId/comment', authenticateToken, async (req, res) => {
+// Comment on Post (text + optional imageUrl from prior upload)
+app.post('/api/posts/:postId/comment', authenticateToken, upload.single('image'), async (req, res) => {
   try {
     const { text } = req.body;
     const { postId } = req.params;
 
-    if (!text || text.trim() === '') {
+    if ((!text || text.trim() === '') && !req.file) {
       return res.status(400).json({ message: 'Bình luận không được bỏ trống' });
     }
 
     const post = await Post.findById(postId);
-    if (!post) {
-      return res.status(404).json({ message: 'Không tìm thấy bài đăng' });
+    if (!post) return res.status(404).json({ message: 'Không tìm thấy bài đăng' });
+
+    let imageUrl = '';
+    if (req.file) {
+      const result = await uploadToCloudinary(req.file.buffer, 'thoiu-comments');
+      imageUrl = result.secure_url;
     }
 
     const newComment = {
-      userId: req.user._id,
+      userId:      req.user._id,
       displayName: req.user.displayName,
-      text: text.trim()
+      text:        (text || '').trim(),
+      imageUrl,
     };
 
     post.comments.push(newComment);
     await post.save();
 
-    // 🔔 Notify couple room in real-time
+    // 🔔 Real-time socket
     if (req.user.partnerId) {
       const ids = [String(req.user._id), String(req.user.partnerId)].sort();
       io.to(`couple:${ids[0]}_${ids[1]}`).emit('post:comment', { postId: post._id, comments: post.comments });
+
+      // Notification
+      const notif = await Notification.create({
+        toUser:   req.user.partnerId,
+        fromUser: req.user._id,
+        type:     'comment',
+        postId:   post._id,
+        message:  `${req.user.displayName} đã bình luận vào ảnh của bạn 💬`,
+      });
+      io.to(`couple:${ids[0]}_${ids[1]}`).emit('notification:new', notif);
+
+      // Email if partner offline
+      if (!isOnline(String(req.user.partnerId))) {
+        try {
+          const partner = await User.findById(req.user.partnerId);
+          if (partner?.email && partner?.emailVerified) {
+            await sendCommentEmail(partner.email, req.user.displayName, (text || '').trim() || '🖼️ [hình ảnh]', false);
+          }
+        } catch (emailErr) { console.error('Comment email error:', emailErr.message); }
+      }
+    }
+
+    res.json(post.comments);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Lỗi máy chủ' });
+  }
+});
+
+// React to a specific comment
+app.post('/api/posts/:postId/comments/:commentId/react', authenticateToken, async (req, res) => {
+  try {
+    const { emoji } = req.body;
+    const { postId, commentId } = req.params;
+    const post = await Post.findById(postId);
+    if (!post) return res.status(404).json({ message: 'Không tìm thấy bài đăng' });
+
+    const comment = post.comments.id(commentId);
+    if (!comment) return res.status(404).json({ message: 'Không tìm thấy bình luận' });
+
+    const idx = comment.reactions.findIndex(r => String(r.userId) === String(req.user._id));
+    if (idx > -1) {
+      if (comment.reactions[idx].emoji === emoji) comment.reactions.splice(idx, 1);
+      else comment.reactions[idx].emoji = emoji;
+    } else {
+      comment.reactions.push({ userId: req.user._id, emoji });
+    }
+    await post.save();
+
+    if (req.user.partnerId) {
+      const ids = [String(req.user._id), String(req.user.partnerId)].sort();
+      io.to(`couple:${ids[0]}_${ids[1]}`).emit('post:comment', { postId: post._id, comments: post.comments });
+    }
+    res.json(post.comments);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Lỗi máy chủ' });
+  }
+});
+
+// Reply to a comment
+app.post('/api/posts/:postId/comments/:commentId/reply', authenticateToken, upload.single('image'), async (req, res) => {
+  try {
+    const { text } = req.body;
+    const { postId, commentId } = req.params;
+
+    const post = await Post.findById(postId);
+    if (!post) return res.status(404).json({ message: 'Không tìm thấy bài đăng' });
+
+    const comment = post.comments.id(commentId);
+    if (!comment) return res.status(404).json({ message: 'Không tìm thấy bình luận' });
+
+    let imageUrl = '';
+    if (req.file) {
+      const result = await uploadToCloudinary(req.file.buffer, 'thoiu-comments');
+      imageUrl = result.secure_url;
+    }
+
+    comment.replies.push({
+      userId:      req.user._id,
+      displayName: req.user.displayName,
+      text:        (text || '').trim(),
+      imageUrl,
+    });
+    await post.save();
+
+    if (req.user.partnerId) {
+      const ids = [String(req.user._id), String(req.user.partnerId)].sort();
+      io.to(`couple:${ids[0]}_${ids[1]}`).emit('post:comment', { postId: post._id, comments: post.comments });
+
+      const notif = await Notification.create({
+        toUser:   req.user.partnerId,
+        fromUser: req.user._id,
+        type:     'reply',
+        postId:   post._id,
+        message:  `${req.user.displayName} đã trả lời bình luận của bạn ↩️`,
+      });
+      io.to(`couple:${ids[0]}_${ids[1]}`).emit('notification:new', notif);
+
+      if (!isOnline(String(req.user.partnerId))) {
+        try {
+          const partner = await User.findById(req.user.partnerId);
+          if (partner?.email && partner?.emailVerified) {
+            await sendCommentEmail(partner.email, req.user.displayName, (text || '').trim() || '🖼️ [hình ảnh]', true);
+          }
+        } catch (emailErr) { console.error('Reply email error:', emailErr.message); }
+      }
     }
 
     res.json(post.comments);
@@ -554,6 +720,96 @@ app.put('/api/user/background', authenticateToken, upload.single('background'), 
     res.json({ backgroundUrl: req.user.backgroundUrl });
   } catch (err) {
     console.error(err);
+    res.status(500).json({ message: 'Lỗi máy chủ' });
+  }
+});
+
+// ================= EMAIL VERIFICATION =================
+
+// Send OTP to email
+app.post('/api/user/email/send-otp', authenticateToken, async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email || !email.includes('@')) {
+      return res.status(400).json({ message: 'Email không hợp lệ' });
+    }
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expires = new Date(Date.now() + 10 * 60 * 1000); // 10 min
+
+    req.user.email = email.trim().toLowerCase();
+    req.user.emailOtp = otp;
+    req.user.emailOtpExpires = expires;
+    req.user.emailVerified = false;
+    await req.user.save();
+
+    await sendOtpEmail(email, otp);
+    res.json({ message: 'Mã OTP đã được gửi tới email của bạn!' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Lỗi gửi email: ' + err.message });
+  }
+});
+
+// Confirm OTP
+app.post('/api/user/email/confirm-otp', authenticateToken, async (req, res) => {
+  try {
+    const { otp } = req.body;
+    if (!otp) return res.status(400).json({ message: 'Vui lòng nhập mã OTP' });
+
+    if (req.user.emailOtp !== otp) {
+      return res.status(400).json({ message: 'Mã OTP không đúng' });
+    }
+    if (new Date() > req.user.emailOtpExpires) {
+      return res.status(400).json({ message: 'Mã OTP đã hết hạn, vui lòng gửi lại' });
+    }
+
+    req.user.emailVerified = true;
+    req.user.emailOtp = null;
+    req.user.emailOtpExpires = null;
+    await req.user.save();
+
+    res.json({ message: 'Email đã được xác thực thành công! 🎉', email: req.user.email, emailVerified: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Lỗi máy chủ' });
+  }
+});
+
+// ================= NOTIFICATIONS =================
+
+// Get notifications for current user (latest 30)
+app.get('/api/notifications', authenticateToken, async (req, res) => {
+  try {
+    const notifs = await Notification.find({ toUser: req.user._id })
+      .sort({ createdAt: -1 })
+      .limit(30)
+      .populate('fromUser', 'displayName avatarUrl');
+    res.json(notifs);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Lỗi máy chủ' });
+  }
+});
+
+// Mark specific notification as read
+app.put('/api/notifications/:id/read', authenticateToken, async (req, res) => {
+  try {
+    await Notification.findOneAndUpdate(
+      { _id: req.params.id, toUser: req.user._id },
+      { read: true }
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ message: 'Lỗi máy chủ' });
+  }
+});
+
+// Mark all notifications as read
+app.put('/api/notifications/read-all', authenticateToken, async (req, res) => {
+  try {
+    await Notification.updateMany({ toUser: req.user._id, read: false }, { read: true });
+    res.json({ ok: true });
+  } catch (err) {
     res.status(500).json({ message: 'Lỗi máy chủ' });
   }
 });

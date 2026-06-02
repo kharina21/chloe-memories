@@ -8,6 +8,7 @@ import MomentCard from './components/MomentCard';
 import FloatingHearts from './components/FloatingHearts';
 import ProfileEditModal from './components/ProfileEditModal';
 import DraggableBrush from './components/DraggableBrush';
+import NotificationBell from './components/NotificationBell';
 import { connectSocket, disconnectSocket } from './socket';
 
 // Backend API URL
@@ -331,6 +332,8 @@ export default function App() {
               >
                 <RefreshCw size={18} className={refreshing ? 'animate-spin' : ''} />
               </button>
+
+              <NotificationBell apiBase={API_BASE} token={token} socket={socket} />
 
               <button
                 onClick={handleLogout}
