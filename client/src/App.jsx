@@ -7,8 +7,8 @@ import LocketFrame from './components/LocketFrame';
 import MomentCard from './components/MomentCard';
 import FloatingHearts from './components/FloatingHearts';
 
-// Backend API URL
-const API_BASE = 'http://localhost:5000';
+// Backend API URL — set VITE_API_BASE in Render environment variables for production
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:5000';
 
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem('thoiu_token') || null);
