@@ -408,6 +408,7 @@ export default function App() {
               {/* Settings gear */}
               <button
                 onClick={() => setShowSettings(true)}
+                className="settings-gear-btn"
                 style={{ background: 'none', border: 'none', color: '#8c7377', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '4px' }}
                 title="Cài đặt"
               >

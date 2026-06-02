@@ -17,6 +17,27 @@ export default function SettingsModal({ apiBase, token, onClose, onRestored }) {
   const [loading, setLoading]   = useState(false);
   const [restoring, setRestoring] = useState(null);
 
+  // Animation states
+  const [active, setActive]     = useState(false);
+  const [closing, setClosing]   = useState(false);
+
+  useEffect(() => {
+    // Trigger entry animation
+    const raf = requestAnimationFrame(() => {
+      setActive(true);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  const handleClose = () => {
+    if (closing) return;
+    setClosing(true);
+    setActive(false);
+    setTimeout(() => {
+      onClose();
+    }, 280); // matches the transition duration in CSS
+  };
+
   const fetchTrash = async () => {
     setLoading(true);
     try {
@@ -52,16 +73,10 @@ export default function SettingsModal({ apiBase, token, onClose, onRestored }) {
   ];
 
   return createPortal(
-    <div style={{ position: 'fixed', inset: 0, zIndex: 100000, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+    <div className={`bottom-sheet-backdrop ${active ? 'active' : ''}`}>
       <div
-        className="glass-card animate-scale-in"
+        className="bottom-sheet-content glass-card"
         style={{
-          width: '100%', maxWidth: '480px',
-          maxHeight: '85vh',
-          borderRadius: '28px 28px 0 0',
-          overflow: 'hidden',
-          display: 'flex', flexDirection: 'column',
-          background: 'rgba(255,255,255,0.97)',
           boxShadow: '0 -8px 48px rgba(255,107,139,0.2)',
         }}
       >
@@ -71,7 +86,7 @@ export default function SettingsModal({ apiBase, token, onClose, onRestored }) {
             <span style={{ fontSize: '1.4rem' }}>⚙️</span>
             <span style={{ fontWeight: 800, color: '#ff6b8b', fontSize: '1.05rem' }}>Cài đặt</span>
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8c7377' }}><X size={22} /></button>
+          <button onClick={handleClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8c7377' }}><X size={22} /></button>
         </div>
 
         {/* Tabs */}
@@ -173,7 +188,7 @@ export default function SettingsModal({ apiBase, token, onClose, onRestored }) {
       {/* Backdrop click to close */}
       <div
         style={{ position: 'absolute', inset: 0, zIndex: -1 }}
-        onClick={onClose}
+        onClick={handleClose}
       />
     </div>
   , document.body);
