@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { MessageCircle, Send, CornerDownRight, Image, X, Smile } from 'lucide-react';
 
 const COMMENT_EMOJIS = ['❤️', '😍', '😂', '🥺', '👏', '🔥'];
