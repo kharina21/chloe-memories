@@ -43,6 +43,16 @@ export default function App() {
     localStorage.setItem('thoiu_hearts_enabled', String(val));
   };
 
+  const [brushEnabled, setBrushEnabled] = useState(() => {
+    const stored = localStorage.getItem('thoiu_brush_enabled');
+    return stored === null ? true : stored === 'true';
+  });
+
+  const handleToggleBrush = (val) => {
+    setBrushEnabled(val);
+    localStorage.setItem('thoiu_brush_enabled', String(val));
+  };
+
   // Load profile details if token exists
   const fetchProfile = async (authToken) => {
     setLoading(true); // show spinner instead of blank screen during transition
@@ -328,14 +338,7 @@ export default function App() {
       )}
 
       {/* Batman brush — draggable & pinch-zoomable, synced via socket */}
-      <DraggableBrush src="/banchaibatman.png" initialWidth={160} socket={socket} />
-
-      {/* Background music player — mobile FAB, hidden on desktop */}
-      {view === 'dashboard' && user && (
-        <div className="music-player-fab">
-          <MusicPlayer partnerMusic={user.partnerId?.music} myMusic={user.music} />
-        </div>
-      )}
+      {brushEnabled && <DraggableBrush src="/banchaibatman.png" initialWidth={160} socket={socket} />}
 
       {/* Dynamic Background Elements */}
       <div style={{
@@ -497,14 +500,13 @@ export default function App() {
 
           {/* ── Sidebar (desktop only) ───────────────────────────────── */}
           <div className="app-sidebar-col">
-            {/* Music player — inline in sidebar */}
-            <div className="music-player-sidebar">
-              <MusicPlayer
-                partnerMusic={user.partnerId?.music}
-                myMusic={user.music}
-                sidebarMode
-              />
-            </div>
+            {/* Music player — responsive inline/FAB managed internally */}
+            <MusicPlayer
+              partnerMusic={user.partnerId?.music}
+              myMusic={user.music}
+              apiBase={API_BASE}
+              token={token}
+            />
 
             {/* Partner info card */}
             {user.partnerId && (
@@ -599,6 +601,8 @@ export default function App() {
           onUserUpdate={setUser}
           heartsEnabled={heartsEnabled}
           onToggleHearts={handleToggleHearts}
+          brushEnabled={brushEnabled}
+          onToggleBrush={handleToggleBrush}
         />
       )}
     </div>

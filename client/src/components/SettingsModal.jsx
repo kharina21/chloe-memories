@@ -11,7 +11,7 @@ function timeAgo(dateStr) {
   return `${d} ngày trước`;
 }
 
-export default function SettingsModal({ apiBase, token, onClose, onRestored, user, onUserUpdate, heartsEnabled, onToggleHearts }) {
+export default function SettingsModal({ apiBase, token, onClose, onRestored, user, onUserUpdate, heartsEnabled, onToggleHearts, brushEnabled, onToggleBrush }) {
   const [tab, setTab]           = useState('trash');
   const [trashPosts, setTrash]  = useState([]);
   const [loading, setLoading]   = useState(false);
@@ -198,6 +198,8 @@ export default function SettingsModal({ apiBase, token, onClose, onRestored, use
             <DisplaySettings
               heartsEnabled={heartsEnabled}
               onToggleHearts={onToggleHearts}
+              brushEnabled={brushEnabled}
+              onToggleBrush={onToggleBrush}
             />
           )}
         </div>
@@ -212,7 +214,7 @@ export default function SettingsModal({ apiBase, token, onClose, onRestored, use
 }
 
 // ── Display Settings Subcomponent ─────────────────────────────────────────
-function DisplaySettings({ heartsEnabled, onToggleHearts }) {
+function DisplaySettings({ heartsEnabled, onToggleHearts, brushEnabled, onToggleBrush }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <h4 style={{ fontSize: '0.88rem', color: '#ff6b8b', fontWeight: 800 }}>✨ HIỆU ỨNG HIỂN THỊ</h4>
@@ -259,6 +261,59 @@ function DisplaySettings({ heartsEnabled, onToggleHearts }) {
               position: 'absolute',
               top: '3px',
               left: heartsEnabled ? '25px' : '3px',
+              width: '20px',
+              height: '20px',
+              borderRadius: '50%',
+              background: 'white',
+              boxShadow: '0 1px 4px rgba(0,0,0,0.18)',
+              transition: 'left 0.22s cubic-bezier(0.34, 1.56, 0.64, 1)',
+            }}
+          />
+        </button>
+      </div>
+
+      {/* Toggle brush */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '16px',
+          background: 'rgba(255,107,139,0.04)',
+          border: '1px solid rgba(255,107,139,0.12)',
+          borderRadius: '16px',
+        }}
+      >
+        <div>
+          <p style={{ margin: 0, fontSize: '0.88rem', fontWeight: 700, color: '#4a373b' }}>
+            🖌️ Bàn chải Batman
+          </p>
+          <p style={{ margin: '4px 0 0', fontSize: '0.75rem', color: '#8c7377' }}>
+            Bật/tắt bàn chải Batman để tương tác vẽ tranh
+          </p>
+        </div>
+        <button
+          onClick={() => onToggleBrush?.(!brushEnabled)}
+          style={{
+            width: '48px',
+            height: '26px',
+            borderRadius: '13px',
+            border: 'none',
+            cursor: 'pointer',
+            background: brushEnabled
+              ? 'linear-gradient(135deg, #ff6b8b, #ff477e)'
+              : 'rgba(0,0,0,0.15)',
+            position: 'relative',
+            transition: 'background 0.25s ease',
+            flexShrink: 0,
+          }}
+          title={brushEnabled ? 'Tắt bàn chải Batman' : 'Bật bàn chải Batman'}
+        >
+          <span
+            style={{
+              position: 'absolute',
+              top: '3px',
+              left: brushEnabled ? '25px' : '3px',
               width: '20px',
               height: '20px',
               borderRadius: '50%',
