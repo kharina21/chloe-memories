@@ -68,6 +68,17 @@ const UserSchema = new mongoose.Schema({
   anniversaryDate: {
     type: Date,
     default: null
+  },
+  music: {
+    type: {
+      source: { type: String, enum: ['youtube', 'zing'], default: 'youtube' },
+      id: String,
+      title: String,
+      artist: String,
+      thumbnail: String,
+      url: String
+    },
+    default: null
   }
 }, { timestamps: true });
 
@@ -140,7 +151,7 @@ const PostSchema = new mongoose.Schema({
 const NotificationSchema = new mongoose.Schema({
   toUser:    { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   fromUser:  { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  type:      { type: String, enum: ['post', 'comment', 'reply', 'reaction', 'brush'], required: true },
+  type:      { type: String, enum: ['post', 'comment', 'reply', 'reaction', 'brush', 'music'], required: true },
   postId:    { type: mongoose.Schema.Types.ObjectId, ref: 'Post', default: null },
   message:   { type: String, required: true },
   read:      { type: Boolean, default: false },

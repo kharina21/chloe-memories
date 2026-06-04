@@ -10,6 +10,7 @@ import ProfileEditModal from './components/ProfileEditModal';
 import DraggableBrush from './components/DraggableBrush';
 import NotificationBell from './components/NotificationBell';
 import SettingsModal from './components/SettingsModal';
+import MusicPlayer from './components/MusicPlayer';
 import { connectSocket, disconnectSocket } from './socket';
 
 // Backend API URL
@@ -218,11 +219,35 @@ export default function App() {
       setPosts(prev => prev.filter(p => String(p._id) !== String(postId)));
     });
 
+    // Music update from partner or self
+    s.on('music:update', ({ userId, music }) => {
+      setUser(prev => {
+        if (!prev) return prev;
+        if (prev.partnerId && String(prev.partnerId._id || prev.partnerId) === String(userId)) {
+          return {
+            ...prev,
+            partnerId: {
+              ...prev.partnerId,
+              music: music
+            }
+          };
+        }
+        if (String(prev._id || prev.id) === String(userId)) {
+          return {
+            ...prev,
+            music: music
+          };
+        }
+        return prev;
+      });
+    });
+
     return () => {
       s.off('post:new');
       s.off('post:reaction');
       s.off('post:comment');
       s.off('post:deleted');
+      s.off('music:update');
     };
   }, [token, user?.partnerStatus]);
 
@@ -295,6 +320,11 @@ export default function App() {
 
       {/* Batman brush — draggable & pinch-zoomable, synced via socket */}
       <DraggableBrush src="/banchaibatman.png" initialWidth={160} socket={socket} />
+
+      {/* Background music player */}
+      {view === 'dashboard' && user && (
+        <MusicPlayer partnerMusic={user.partnerId?.music} />
+      )}
 
       {/* Dynamic Background Elements */}
       <div style={{
@@ -510,6 +540,8 @@ export default function App() {
           token={token}
           onClose={() => setShowSettings(false)}
           onRestored={handlePostRestored}
+          user={user}
+          onUserUpdate={setUser}
         />
       )}
     </div>

@@ -218,7 +218,7 @@ app.post('/api/auth/login', async (req, res) => {
 app.get('/api/auth/me', authenticateToken, async (req, res) => {
   try {
     const user = await User.findById(req.user._id)
-      .populate('partnerId', 'username displayName avatarUrl currentStatus statusUpdatedAt');
+      .populate('partnerId', 'username displayName avatarUrl currentStatus statusUpdatedAt music');
     
     res.json({
       id: user._id,
@@ -232,7 +232,8 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
       partnerStatus: user.partnerStatus,
       currentStatus: user.currentStatus,
       statusUpdatedAt: user.statusUpdatedAt,
-      anniversaryDate: user.anniversaryDate
+      anniversaryDate: user.anniversaryDate,
+      music: user.music
     });
   } catch (err) {
     console.error(err);
@@ -892,6 +893,118 @@ app.put('/api/user/background', authenticateToken, upload.single('background'), 
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Lỗi máy chủ' });
+  }
+});
+
+// Update background music for partner
+app.put('/api/user/music', authenticateToken, async (req, res) => {
+  try {
+    const { music } = req.body; // { source, id, title, artist, thumbnail, url } or null
+    
+    req.user.music = music;
+    await req.user.save();
+    
+    if (req.user.partnerId && req.user.partnerStatus === 'connected') {
+      const ids = [String(req.user._id), String(req.user.partnerId)].sort();
+      io.to(`couple:${ids[0]}_${ids[1]}`).emit('music:update', {
+        userId: req.user._id,
+        music: music
+      });
+      
+      // Create notification for partner if music was set
+      if (music) {
+        const notif = await Notification.create({
+          toUser:   req.user.partnerId,
+          fromUser: req.user._id,
+          type:     'music',
+          message:  `${req.user.displayName} vừa đổi nhạc nền cho bạn! 🎵`,
+        });
+        io.to(`couple:${ids[0]}_${ids[1]}`).emit('notification:new', notif);
+      }
+    }
+    
+    res.json({ music: req.user.music });
+  } catch (err) {
+    console.error('Update music error:', err);
+    res.status(500).json({ message: 'Lỗi máy chủ khi cập nhật nhạc' });
+  }
+});
+
+// Search YouTube videos
+app.get('/api/youtube/search', authenticateToken, async (req, res) => {
+  try {
+    const { q } = req.query;
+    if (!q || q.trim() === '') {
+      return res.status(400).json({ message: 'Từ khóa tìm kiếm không được trống' });
+    }
+    
+    const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}&sp=EgIQAQ%253D%253D`;
+    
+    const ytRes = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
+        'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7'
+      }
+    });
+    const html = await ytRes.text();
+    
+    const regex = /var ytInitialData\s*=\s*({.+?});/;
+    const match = html.match(regex);
+    let ytInitialData;
+    
+    if (match && match[1]) {
+      ytInitialData = JSON.parse(match[1]);
+    } else {
+      const regex2 = /ytInitialData\s*=\s*({.+?});/;
+      const match2 = html.match(regex2);
+      if (match2 && match2[1]) {
+        ytInitialData = JSON.parse(match2[1]);
+      }
+    }
+    
+    if (!ytInitialData) {
+      return res.status(500).json({ message: 'Không thể tải kết quả tìm kiếm từ YouTube' });
+    }
+    
+    const contents = ytInitialData.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents;
+    if (!contents) {
+      return res.json([]);
+    }
+    
+    const itemSection = contents.find(c => c.itemSectionRenderer);
+    if (!itemSection) {
+      return res.json([]);
+    }
+    
+    const items = itemSection.itemSectionRenderer.contents;
+    const videos = [];
+    
+    for (const item of items) {
+      if (item.videoRenderer) {
+        const vr = item.videoRenderer;
+        const videoId = vr.videoId;
+        const title = vr.title?.runs?.[0]?.text || vr.title?.accessibility?.accessibilityData?.label;
+        const thumbnail = vr.thumbnail?.thumbnails?.[0]?.url;
+        const channel = vr.ownerText?.runs?.[0]?.text;
+        const duration = vr.lengthText?.simpleText || '00:00';
+        
+        if (videoId && title) {
+          videos.push({
+            id: videoId,
+            title,
+            thumbnail,
+            channel,
+            duration,
+            url: `https://www.youtube.com/watch?v=${videoId}`
+          });
+        }
+      }
+    }
+    
+    res.json(videos.slice(0, 15));
+  } catch (err) {
+    console.error('YouTube search error:', err);
+    res.status(500).json({ message: 'Lỗi máy chủ khi tìm kiếm YouTube' });
   }
 });
 
