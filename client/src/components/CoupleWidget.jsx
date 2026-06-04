@@ -148,9 +148,9 @@ export default function CoupleWidget({ user, onUpdateAnniversary, onUpdateStatus
 
         {daysTogether !== null ? (
           <div>
-            <div style={{ fontSize: '0.9rem', color: '#8c7377', fontWeight: 500 }}>Chúng mình đã bên nhau</div>
-            <div style={{ fontSize: '2.4rem', fontWeight: 800, color: '#ff6b8b', lineHeight: 1.2, margin: '4px 0' }}>
-              {daysTogether} <span style={{ fontSize: '1.2rem', fontWeight: 600 }}>ngày</span>
+            <div style={{ fontSize: '0.88rem', color: '#8c7377', fontWeight: 500 }}>Chúng mình đã bên nhau</div>
+            <div className="couple-days-number" style={{ margin: '4px 0' }}>
+              {daysTogether} <span style={{ fontSize: '1.1rem', fontWeight: 600 }}>ngày</span>
             </div>
             <button 
               onClick={() => setShowAnniversaryInput(!showAnniversaryInput)}

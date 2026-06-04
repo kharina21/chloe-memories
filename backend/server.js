@@ -1008,6 +1008,216 @@ app.get('/api/youtube/search', authenticateToken, async (req, res) => {
   }
 });
 
+// Get all playlists for user and partner
+app.get('/api/user/playlists', authenticateToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    
+    let hasChanges = false;
+    // Ensure default playlist exists
+    if (!user.playlists || user.playlists.length === 0) {
+      user.playlists = [{ name: '🎵 Nhạc yêu thích', songs: [] }];
+      hasChanges = true;
+    } else {
+      // Ensure each playlist has an _id and is persisted (not isNew default)
+      user.playlists.forEach(pl => {
+        if (pl.isNew) {
+          hasChanges = true;
+        }
+        if (!pl._id) {
+          pl._id = new mongoose.Types.ObjectId();
+          hasChanges = true;
+        }
+      });
+    }
+
+    if (hasChanges) {
+      user.markModified('playlists');
+      await user.save();
+    }
+
+    let partnerPlaylists = [];
+    if (user.partnerId && user.partnerStatus === 'connected') {
+      const partner = await User.findById(user.partnerId);
+      if (partner) {
+        let partnerChanges = false;
+        if (!partner.playlists || partner.playlists.length === 0) {
+          partner.playlists = [{ name: '🎵 Nhạc yêu thích', songs: [] }];
+          partnerChanges = true;
+        } else {
+          partner.playlists.forEach(pl => {
+            if (pl.isNew) {
+              partnerChanges = true;
+            }
+            if (!pl._id) {
+              pl._id = new mongoose.Types.ObjectId();
+              partnerChanges = true;
+            }
+          });
+        }
+        if (partnerChanges) {
+          await partner.save();
+        }
+        partnerPlaylists = partner.playlists;
+      }
+    }
+
+    res.json({
+      myPlaylists: user.playlists,
+      partnerPlaylists: partnerPlaylists
+    });
+  } catch (err) {
+    console.error('Get playlists error:', err);
+    res.status(500).json({ message: 'Lỗi máy chủ khi lấy danh sách phát' });
+  }
+});
+
+// Create a new playlist
+app.post('/api/user/playlists', authenticateToken, async (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name || name.trim() === '') {
+      return res.status(400).json({ message: 'Tên danh sách phát không được trống' });
+    }
+
+    const user = await User.findById(req.user._id);
+    user.playlists.push({ name: name.trim(), songs: [] });
+    await user.save();
+
+    res.status(201).json(user.playlists);
+  } catch (err) {
+    console.error('Create playlist error:', err);
+    res.status(500).json({ message: 'Lỗi máy chủ khi tạo danh sách phát' });
+  }
+});
+
+// Rename a playlist
+app.put('/api/user/playlists/:playlistId', authenticateToken, async (req, res) => {
+  try {
+    const { name } = req.body;
+    const { playlistId } = req.params;
+    if (!name || name.trim() === '') {
+      return res.status(400).json({ message: 'Tên danh sách phát không được trống' });
+    }
+
+    const user = await User.findById(req.user._id);
+    const playlist = user.playlists.find(p => (p._id && p._id.toString() === playlistId) || p.id === playlistId);
+    if (!playlist) {
+      return res.status(404).json({ message: 'Không tìm thấy danh sách phát' });
+    }
+
+    playlist.name = name.trim();
+    await user.save();
+
+    res.json(user.playlists);
+  } catch (err) {
+    console.error('Rename playlist error:', err);
+    res.status(500).json({ message: 'Lỗi máy chủ khi đổi tên danh sách phát' });
+  }
+});
+
+// Delete a playlist
+app.delete('/api/user/playlists/:playlistId', authenticateToken, async (req, res) => {
+  try {
+    const { playlistId } = req.params;
+    const user = await User.findById(req.user._id);
+    
+    const playlist = user.playlists.find(p => (p._id && p._id.toString() === playlistId) || p.id === playlistId);
+    if (!playlist) {
+      return res.status(404).json({ message: 'Không tìm thấy danh sách phát' });
+    }
+
+    // Don't allow deleting the default playlist if it's the only one
+    if (user.playlists.length <= 1) {
+      return res.status(400).json({ message: 'Không thể xóa danh sách phát duy nhất' });
+    }
+
+    user.playlists.pull(playlist._id || playlist.id);
+    await user.save();
+
+    res.json(user.playlists);
+  } catch (err) {
+    console.error('Delete playlist error:', err);
+    res.status(500).json({ message: 'Lỗi máy chủ khi xóa danh sách phát' });
+  }
+});
+
+// Add a song to a playlist
+app.post('/api/user/playlists/:playlistId/songs', authenticateToken, async (req, res) => {
+  try {
+    const { playlistId } = req.params;
+    const { song } = req.body; // { source, id, title, artist, thumbnail, url }
+    if (!song || !song.id || !song.title) {
+      return res.status(400).json({ message: 'Thông tin bài hát không đầy đủ' });
+    }
+
+    const user = await User.findById(req.user._id);
+    
+    let hasChanges = false;
+    if (user.playlists && user.playlists.length > 0) {
+      user.playlists.forEach(pl => {
+        if (pl.isNew) {
+          hasChanges = true;
+        }
+        if (!pl._id) {
+          pl._id = new mongoose.Types.ObjectId();
+          hasChanges = true;
+        }
+      });
+    }
+    if (hasChanges) {
+      user.markModified('playlists');
+      await user.save();
+    }
+
+    const playlist = user.playlists.find(p => (p._id && p._id.toString() === playlistId) || p.id === playlistId);
+
+    if (!playlist) {
+      return res.status(404).json({ message: 'Không tìm thấy danh sách phát' });
+    }
+
+    // Check if song already exists in playlist to prevent duplicates
+    const exists = playlist.songs.some(s => s.id === song.id && s.source === song.source);
+    if (exists) {
+      return res.status(400).json({ message: 'Bài hát đã có trong danh sách phát này' });
+    }
+
+    playlist.songs.push(song);
+    await user.save();
+
+    res.status(201).json(user.playlists);
+  } catch (err) {
+    console.error('Add song to playlist error:', err);
+    res.status(500).json({ message: `Lỗi máy chủ khi thêm bài hát: ${err.message}` });
+  }
+});
+
+// Remove a song from a playlist
+app.delete('/api/user/playlists/:playlistId/songs/:songId', authenticateToken, async (req, res) => {
+  try {
+    const { playlistId, songId } = req.params;
+    const user = await User.findById(req.user._id);
+    
+    const playlist = user.playlists.find(p => (p._id && p._id.toString() === playlistId) || p.id === playlistId);
+    if (!playlist) {
+      return res.status(404).json({ message: 'Không tìm thấy danh sách phát' });
+    }
+
+    const song = playlist.songs.find(s => (s._id && s._id.toString() === songId) || s.id === songId);
+    if (!song) {
+      return res.status(404).json({ message: 'Không tìm thấy bài hát' });
+    }
+
+    playlist.songs.pull(song._id || song.id);
+    await user.save();
+
+    res.json(user.playlists);
+  } catch (err) {
+    console.error('Remove song error:', err);
+    res.status(500).json({ message: 'Lỗi máy chủ khi xóa bài hát' });
+  }
+});
+
 // ================= EMAIL VERIFICATION =================
 
 // Send OTP to email

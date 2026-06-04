@@ -79,6 +79,22 @@ const UserSchema = new mongoose.Schema({
       url: String
     },
     default: null
+  },
+  playlists: {
+    type: [{
+      name: { type: String, required: true },
+      songs: [{
+        source: { type: String, enum: ['youtube', 'zing'], default: 'youtube' },
+        id: String,
+        title: String,
+        artist: String,
+        thumbnail: String,
+        url: String
+      }]
+    }],
+    default: [
+      { name: '🎵 Nhạc yêu thích', songs: [] }
+    ]
   }
 }, { timestamps: true });
 

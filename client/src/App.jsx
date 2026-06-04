@@ -33,6 +33,15 @@ export default function App() {
   const [highlightPostId, setHighlightPostId]     = useState(null);
   const [openCommentPostId, setOpenCommentPostId] = useState(null);
   const [showSettings, setShowSettings]           = useState(false);
+  const [heartsEnabled, setHeartsEnabled] = useState(() => {
+    const stored = localStorage.getItem('thoiu_hearts_enabled');
+    return stored === null ? true : stored === 'true';
+  });
+
+  const handleToggleHearts = (val) => {
+    setHeartsEnabled(val);
+    localStorage.setItem('thoiu_hearts_enabled', String(val));
+  };
 
   // Load profile details if token exists
   const fetchProfile = async (authToken) => {
@@ -302,7 +311,7 @@ export default function App() {
   return (
     <div className="app-container">
       {/* Wind-blown floating hearts background effect */}
-      <FloatingHearts />
+      <FloatingHearts enabled={heartsEnabled} />
 
       {/* User background image — fixed, blurred, semi-transparent */}
       {user?.backgroundUrl && (
@@ -321,9 +330,11 @@ export default function App() {
       {/* Batman brush — draggable & pinch-zoomable, synced via socket */}
       <DraggableBrush src="/banchaibatman.png" initialWidth={160} socket={socket} />
 
-      {/* Background music player */}
+      {/* Background music player — mobile FAB, hidden on desktop */}
       {view === 'dashboard' && user && (
-        <MusicPlayer partnerMusic={user.partnerId?.music} />
+        <div className="music-player-fab">
+          <MusicPlayer partnerMusic={user.partnerId?.music} myMusic={user.music} />
+        </div>
       )}
 
       {/* Dynamic Background Elements */}
@@ -370,156 +381,200 @@ export default function App() {
       )}
 
       {view === 'dashboard' && user && (
-        <div style={{ display: 'flex', flexDirection: 'column', width: '100%', gap: '16px' }}>
-          
-          {/* Header Panel — sticky so bell & controls stay visible while scrolling */}
-          <div
-            className="glass-card"
-            style={{
-              padding: '14px 18px',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: '8px',
-              position: 'sticky',
-              top: '0px',
-              zIndex: 9000,
-              backdropFilter: 'blur(20px)',
-              WebkitBackdropFilter: 'blur(20px)',
-              background: 'rgba(255,255,255,0.82)',
-              boxShadow: '0 2px 20px rgba(255,107,139,0.12)',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              {/* Avatar + Edit button */}
-              <div
-                onClick={() => setShowProfileEdit(true)}
-                title="Chỉnh sửa hồ sơ"
-                style={{
-                  width: '34px', height: '34px', borderRadius: '50%',
-                  border: '2px solid #ffd3da',
-                  overflow: 'hidden', cursor: 'pointer',
-                  background: user.avatarUrl ? 'transparent' : 'linear-gradient(135deg, #ffd3da, #fff3c4)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  flexShrink: 0,
-                  transition: 'border-color 0.2s',
-                }}
-                onMouseOver={(e) => e.currentTarget.style.borderColor = '#ff6b8b'}
-                onMouseOut={(e) => e.currentTarget.style.borderColor = '#ffd3da'}
-              >
-                {user.avatarUrl
-                  ? <img src={user.avatarUrl} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  : <Camera size={14} color="#ff6b8b" />
-                }
+        <>
+          {/* ── Main column ─────────────────────────────────────────────── */}
+          <div className="app-main-col">
+
+            {/* Header Panel */}
+            <div
+              className="glass-card app-header"
+              style={{ marginBottom: '14px' }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {/* Avatar */}
+                <div
+                  onClick={() => setShowProfileEdit(true)}
+                  title="Chỉnh sửa hồ sơ"
+                  style={{
+                    width: '36px', height: '36px', borderRadius: '50%',
+                    border: '2px solid #ffd3da',
+                    overflow: 'hidden', cursor: 'pointer',
+                    background: user.avatarUrl ? 'transparent' : 'linear-gradient(135deg, #ffd3da, #fff3c4)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    flexShrink: 0,
+                    transition: 'border-color 0.2s, transform 0.2s',
+                    boxShadow: '0 2px 8px rgba(255,107,139,0.15)',
+                  }}
+                  onMouseOver={(e) => { e.currentTarget.style.borderColor = '#ff6b8b'; e.currentTarget.style.transform = 'scale(1.08)'; }}
+                  onMouseOut={(e) => { e.currentTarget.style.borderColor = '#ffd3da'; e.currentTarget.style.transform = 'scale(1)'; }}
+                >
+                  {user.avatarUrl
+                    ? <img src={user.avatarUrl} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : <Camera size={14} color="#ff6b8b" />
+                  }
+                </div>
+                <Heart size={18} fill="#ff6b8b" color="#ff6b8b" />
+                <span style={{ fontSize: '1.05rem', fontWeight: 800, color: '#ff6b8b', letterSpacing: '-0.01em' }}>Chloe Memories 💕</span>
               </div>
-              <Heart size={20} fill="#ff6b8b" color="#ff6b8b" />
-              <span style={{ fontSize: '1.15rem', fontWeight: 800, color: '#ff6b8b' }}>Chloe Memories 💕</span>
+
+              <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                <button
+                  onClick={() => fetchFeed(token)}
+                  className="header-action"
+                  title="Tải lại feed"
+                >
+                  <RefreshCw size={17} className={refreshing ? 'animate-spin' : ''} color={refreshing ? '#ff6b8b' : undefined} />
+                </button>
+
+                <NotificationBell apiBase={API_BASE} token={token} socket={socket} onNavigate={handleNavigate} />
+
+                <button
+                  onClick={() => setShowSettings(true)}
+                  className="header-action settings-gear-btn"
+                  title="Cài đặt"
+                >
+                  <Settings size={17} />
+                </button>
+
+                <button
+                  onClick={handleLogout}
+                  className="header-action"
+                  title="Đăng xuất"
+                >
+                  <LogOut size={17} />
+                </button>
+              </div>
             </div>
-            
-            <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-              <button
-                onClick={() => fetchFeed(token)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: refreshing ? '#ff6b8b' : '#8c7377',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  padding: '4px'
-                }}
-                title="Tải lại feed"
-              >
-                <RefreshCw size={18} className={refreshing ? 'animate-spin' : ''} />
-              </button>
 
-              <NotificationBell apiBase={API_BASE} token={token} socket={socket} onNavigate={handleNavigate} />
+            {/* Couple Widget */}
+            <CoupleWidget
+              user={user}
+              onUpdateAnniversary={handleUpdateAnniversary}
+              onUpdateStatus={handleUpdateStatus}
+              apiBase={API_BASE}
+              token={token}
+            />
 
-              {/* Settings gear */}
-              <button
-                onClick={() => setShowSettings(true)}
-                className="settings-gear-btn"
-                style={{ background: 'none', border: 'none', color: '#8c7377', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '4px' }}
-                title="Cài đặt"
-              >
-                <Settings size={18} />
-              </button>
+            {/* Locket Camera */}
+            <LocketFrame
+              onUploadSuccess={handleUploadSuccess}
+              apiBase={API_BASE}
+              token={token}
+            />
 
-              <button
-                onClick={handleLogout}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: '#8c7377',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  padding: '4px'
-                }}
-                title="Đăng xuất"
-              >
-                <LogOut size={18} />
-              </button>
+            {/* Feed */}
+            <div style={{ width: '100%' }}>
+              <div className="section-header" style={{ marginBottom: '14px' }}>
+                <Sparkles size={15} />
+                <span>Khoảnh khắc yêu thương</span>
+              </div>
+
+              {posts.length > 0 ? (
+                posts.map((post) => (
+                  <MomentCard
+                    key={String(post._id)}
+                    post={post}
+                    currentUser={user}
+                    onReact={handleReactionUpdate}
+                    onComment={handleCommentUpdate}
+                    onDelete={handlePostDelete}
+                    apiBase={API_BASE}
+                    token={token}
+                    highlight={highlightPostId === String(post._id)}
+                    autoOpenComments={openCommentPostId === String(post._id)}
+                  />
+                ))
+              ) : (
+                <div className="glass-card animate-fade-in" style={{ padding: '40px 20px', textAlign: 'center', color: '#8c7377' }}>
+                  <Heart size={36} color="#ffd3da" style={{ marginBottom: '12px' }} />
+                  <p style={{ fontSize: '0.9rem', lineHeight: 1.5 }}>
+                    Chưa có khoảnh khắc nào được chia sẻ.<br />Hãy chụp bức ảnh đầu tiên gửi đối phương!
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Interactive Anniversary Widget & Status Updates */}
-          <CoupleWidget
-            user={user}
-            onUpdateAnniversary={handleUpdateAnniversary}
-            onUpdateStatus={handleUpdateStatus}
-            apiBase={API_BASE}
-            token={token}
-          />
-
-          {/* Capture Locket camera component */}
-          <LocketFrame
-            onUploadSuccess={handleUploadSuccess}
-            apiBase={API_BASE}
-            token={token}
-          />
-
-          {/* feed of Locket moments */}
-          <div style={{ width: '100%' }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              fontSize: '1rem',
-              fontWeight: 800,
-              color: '#ff6b8b',
-              marginBottom: '14px',
-              paddingLeft: '4px'
-            }}>
-              <Sparkles size={16} />
-              <span>Khoảnh khắc yêu thương</span>
+          {/* ── Sidebar (desktop only) ───────────────────────────────── */}
+          <div className="app-sidebar-col">
+            {/* Music player — inline in sidebar */}
+            <div className="music-player-sidebar">
+              <MusicPlayer
+                partnerMusic={user.partnerId?.music}
+                myMusic={user.music}
+                sidebarMode
+              />
             </div>
 
-            {posts.length > 0 ? (
-              posts.map((post) => (
-                <MomentCard
-                  key={String(post._id)}
-                  post={post}
-                  currentUser={user}
-                  onReact={handleReactionUpdate}
-                  onComment={handleCommentUpdate}
-                  onDelete={handlePostDelete}
-                  apiBase={API_BASE}
-                  token={token}
-                  highlight={highlightPostId === String(post._id)}
-                  autoOpenComments={openCommentPostId === String(post._id)}
-                />
-              ))
-            ) : (
-              <div className="glass-card animate-fade-in" style={{ padding: '40px 20px', textAlign: 'center', color: '#8c7377' }}>
-                <Heart size={36} color="#ffd3da" style={{ marginBottom: '12px' }} />
-                <p style={{ fontSize: '0.9rem', lineHeight: 1.5 }}>
-                  Chưa có khoảnh khắc nào được chia sẻ.<br />Hãy chụp bức ảnh đầu tiên gửi đối phương!
-                </p>
+            {/* Partner info card */}
+            {user.partnerId && (
+              <div className="glass-card" style={{ padding: '18px 20px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+                  <Heart size={14} fill="#ff6b8b" color="#ff6b8b" />
+                  <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#ff6b8b' }}>NGƯỜI ẤY</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  {user.partnerId.avatarUrl ? (
+                    <img src={user.partnerId.avatarUrl} alt={user.partnerId.displayName}
+                      style={{ width: '48px', height: '48px', borderRadius: '50%', objectFit: 'cover', border: '2px solid #ffd3da', flexShrink: 0 }} />
+                  ) : (
+                    <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'linear-gradient(135deg, #ffd3da, #fff3c4)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <span style={{ fontWeight: 800, color: '#ff6b8b', fontSize: '1.2rem' }}>{user.partnerId.displayName?.charAt(0)}</span>
+                    </div>
+                  )}
+                  <div>
+                    <p style={{ fontWeight: 700, fontSize: '0.92rem', color: '#3d2e32', marginBottom: '2px' }}>{user.partnerId.displayName}</p>
+                    {user.partnerId.currentStatus && (
+                      <p style={{ fontSize: '0.75rem', color: '#8c7377', fontStyle: 'italic' }}>"{ user.partnerId.currentStatus}"</p>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
+
+            {/* Shortcuts card */}
+            <div className="glass-card" style={{ padding: '18px 20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+                <Sparkles size={14} color="#ff6b8b" />
+                <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#ff6b8b' }}>PHÍM TẮT</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <button
+                  onClick={() => fetchFeed(token)}
+                  style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'none', border: '1px solid #ffd3da', borderRadius: '12px', padding: '10px 14px', cursor: 'pointer', color: '#4a373b', fontSize: '0.82rem', fontWeight: 600, transition: 'all 0.2s', textAlign: 'left' }}
+                  onMouseOver={e => { e.currentTarget.style.background = '#fff0f2'; e.currentTarget.style.borderColor = '#ff6b8b'; }}
+                  onMouseOut={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.borderColor = '#ffd3da'; }}
+                >
+                  <RefreshCw size={14} color="#ff6b8b" /> Tải lại feed
+                </button>
+                <button
+                  onClick={() => setShowProfileEdit(true)}
+                  style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'none', border: '1px solid #ffd3da', borderRadius: '12px', padding: '10px 14px', cursor: 'pointer', color: '#4a373b', fontSize: '0.82rem', fontWeight: 600, transition: 'all 0.2s', textAlign: 'left' }}
+                  onMouseOver={e => { e.currentTarget.style.background = '#fff0f2'; e.currentTarget.style.borderColor = '#ff6b8b'; }}
+                  onMouseOut={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.borderColor = '#ffd3da'; }}
+                >
+                  <Camera size={14} color="#ff6b8b" /> Chỉnh hồ sơ
+                </button>
+                <button
+                  onClick={() => setShowSettings(true)}
+                  style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'none', border: '1px solid #ffd3da', borderRadius: '12px', padding: '10px 14px', cursor: 'pointer', color: '#4a373b', fontSize: '0.82rem', fontWeight: 600, transition: 'all 0.2s', textAlign: 'left' }}
+                  onMouseOver={e => { e.currentTarget.style.background = '#fff0f2'; e.currentTarget.style.borderColor = '#ff6b8b'; }}
+                  onMouseOut={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.borderColor = '#ffd3da'; }}
+                >
+                  <Settings size={14} color="#ff6b8b" /> Cài đặt
+                </button>
+                <button
+                  onClick={handleLogout}
+                  style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'none', border: '1px solid #ffd3da', borderRadius: '12px', padding: '10px 14px', cursor: 'pointer', color: '#8c7377', fontSize: '0.82rem', fontWeight: 600, transition: 'all 0.2s', textAlign: 'left' }}
+                  onMouseOver={e => { e.currentTarget.style.background = '#fff0f2'; e.currentTarget.style.borderColor = '#ffb0bb'; }}
+                  onMouseOut={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.borderColor = '#ffd3da'; }}
+                >
+                  <LogOut size={14} color="#8c7377" /> Đăng xuất
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       {/* Profile Edit Modal */}
@@ -542,6 +597,8 @@ export default function App() {
           onRestored={handlePostRestored}
           user={user}
           onUserUpdate={setUser}
+          heartsEnabled={heartsEnabled}
+          onToggleHearts={handleToggleHearts}
         />
       )}
     </div>

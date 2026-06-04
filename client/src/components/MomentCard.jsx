@@ -1,5 +1,23 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageCircle, Send, CornerDownRight, Image, X, Smile, MoreHorizontal, Pencil, Trash2, Share2, Check } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { MessageCircle, Send, CornerDownRight, Image, X, Smile, MoreHorizontal, Pencil, Trash2, Share2, Check, Download } from 'lucide-react';
+
+const downloadImage = async (url, filename) => {
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = filename || 'locket-photo.jpg';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(blobUrl);
+  } catch (err) {
+    window.open(url, '_blank');
+  }
+};
 
 const COMMENT_EMOJIS = ['❤️', '😍', '😂', '🥺', '👏', '🔥'];
 const POST_EMOJIS    = ['❤️', '😍', '😘', '🥺', '😂', '🎉'];
@@ -32,6 +50,7 @@ export default function MomentCard({
   const [emojiTarget, setEmojiTarget]       = useState(null); // 'post' | commentId | null
   const [postMenuOpen, setPostMenuOpen]     = useState(false);
   const [sharing, setSharing]               = useState(false);
+  const [isDetailOpen, setIsDetailOpen]     = useState(false);
 
   // Top-level comment
   const [commentText, setCommentText]       = useState('');
@@ -269,41 +288,50 @@ export default function MomentCard({
             <div style={{ fontSize: '0.72rem', color: '#8c7377' }}>{timeAgo(post.createdAt)}</div>
           </div>
         </div>
-        {/* 3-dot menu — only for sender */}
-        {isMySender && (
-          <div style={{ position: 'relative' }}>
-            <button
-              onClick={() => setPostMenuOpen(o => !o)}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8c7377', padding: '4px', display: 'flex', alignItems: 'center' }}
-            ><MoreHorizontal size={18} /></button>
-            {postMenuOpen && (
-              <div style={{
-                position: 'absolute', top: '28px', right: 0,
-                background: 'white', borderRadius: '14px',
-                border: '1px solid #ffd3da',
-                boxShadow: '0 8px 24px rgba(255,107,139,0.18)',
-                zIndex: 1000, minWidth: '140px', overflow: 'hidden',
-              }}>
-                <button
-                  onClick={handleShare}
-                  style={{ width: '100%', padding: '10px 16px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', fontSize: '0.85rem', color: '#4a373b', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  {sharing ? <Check size={14} color="#27ae60" /> : <Share2 size={14} />}
-                  {sharing ? 'Đã sao chép!' : 'Chia sẻ ảnh'}
-                </button>
+        {/* 3-dot menu — shown for everyone */}
+        <div style={{ position: 'relative' }}>
+          <button
+            onClick={() => setPostMenuOpen(o => !o)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8c7377', padding: '4px', display: 'flex', alignItems: 'center' }}
+          ><MoreHorizontal size={18} /></button>
+          {postMenuOpen && (
+            <div style={{
+              position: 'absolute', top: '28px', right: 0,
+              background: 'white', borderRadius: '14px',
+              border: '1px solid #ffd3da',
+              boxShadow: '0 8px 24px rgba(255,107,139,0.18)',
+              zIndex: 1000, minWidth: '140px', overflow: 'hidden',
+            }}>
+              <button
+                onClick={handleShare}
+                style={{ width: '100%', padding: '10px 16px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', fontSize: '0.85rem', color: '#4a373b', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {sharing ? <Check size={14} color="#27ae60" /> : <Share2 size={14} />}
+                {sharing ? 'Đã sao chép!' : 'Chia sẻ ảnh'}
+              </button>
+              <button
+                onClick={() => { setPostMenuOpen(false); downloadImage(post.imageUrl, `locket-${post._id}.jpg`); }}
+                style={{ width: '100%', padding: '10px 16px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', fontSize: '0.85rem', color: '#4a373b', display: 'flex', alignItems: 'center', gap: '8px', borderTop: '1px solid #fff0f2' }}>
+                <Download size={14} /> Tải ảnh xuống
+              </button>
+              {isMySender && (
                 <button
                   onClick={handleDeletePost}
                   style={{ width: '100%', padding: '10px 16px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', fontSize: '0.85rem', color: '#e74c3c', display: 'flex', alignItems: 'center', gap: '8px', borderTop: '1px solid #fff0f2' }}>
                   <Trash2 size={14} /> Xóa bài
                 </button>
-              </div>
-            )}
-          </div>
-        )}
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ── Post image ── */}
-      <div style={{ borderRadius: '20px', overflow: 'hidden', border: '3px solid white', boxShadow: '0 8px 16px rgba(255,107,139,0.08)', position: 'relative', aspectRatio: '1', backgroundColor: '#f8f9fa' }}
-        onClick={() => { if (postMenuOpen) setPostMenuOpen(false); if (emojiTarget) setEmojiTarget(null); }}>
+      <div style={{ borderRadius: '20px', overflow: 'hidden', border: '3px solid white', boxShadow: '0 8px 16px rgba(255,107,139,0.08)', position: 'relative', aspectRatio: '1', backgroundColor: '#f8f9fa', cursor: 'pointer' }}
+        onClick={() => {
+          if (postMenuOpen) setPostMenuOpen(false);
+          if (emojiTarget) setEmojiTarget(null);
+          setIsDetailOpen(true);
+        }}>
         <img src={post.imageUrl} alt="Locket moment" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         {post.caption && (
           <div style={{ position: 'absolute', bottom: '12px', left: '12px', right: '12px', background: 'rgba(0,0,0,0.6)', color: 'white', padding: '8px 12px', borderRadius: '16px', fontSize: '0.85rem', textAlign: 'center', backdropFilter: 'blur(4px)' }}>
@@ -632,6 +660,512 @@ export default function MomentCard({
       {/* Close post menu overlay */}
       {postMenuOpen && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 999 }} onClick={() => setPostMenuOpen(false)} />
+      )}
+
+      {/* Lightbox details modal (Facebook-style) */}
+      {isDetailOpen && createPortal(
+        <div
+          className="lightbox-backdrop animate-fade-in"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 99999,
+            display: 'flex',
+            flexDirection: window.innerWidth > 768 ? 'row' : 'column',
+            background: 'rgba(10, 10, 10, 0.98)',
+            backdropFilter: 'blur(15px)',
+            WebkitBackdropFilter: 'blur(15px)',
+            overflow: 'hidden',
+          }}
+        >
+          {/* LEFT SIDE: Image Viewer */}
+          <div
+            style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              position: 'relative',
+              padding: '24px',
+              backgroundColor: 'rgba(0,0,0,0.4)',
+              height: window.innerWidth > 768 ? '100%' : '50vh',
+            }}
+          >
+            <button
+              onClick={() => setIsDetailOpen(false)}
+              style={{
+                position: 'absolute',
+                top: '20px',
+                left: '20px',
+                background: 'rgba(255,255,255,0.15)',
+                border: 'none',
+                borderRadius: '50%',
+                width: '42px',
+                height: '42px',
+                color: 'white',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 10
+              }}
+              title="Đóng chi tiết"
+            >
+              <X size={24} />
+            </button>
+
+            <button
+              onClick={() => downloadImage(post.imageUrl, `locket-${post._id}.jpg`)}
+              style={{
+                position: 'absolute',
+                top: '20px',
+                right: '20px',
+                background: 'rgba(255,255,255,0.15)',
+                border: 'none',
+                borderRadius: '50%',
+                width: '42px',
+                height: '42px',
+                color: 'white',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 10
+              }}
+              title="Tải ảnh xuống"
+            >
+              <Download size={20} />
+            </button>
+
+            <img
+              src={post.imageUrl}
+              alt="Locket moment"
+              style={{
+                maxWidth: '100%',
+                maxHeight: '100%',
+                objectFit: 'contain',
+                borderRadius: '12px',
+                boxShadow: '0 16px 48px rgba(0,0,0,0.6)'
+              }}
+            />
+
+            {post.caption && (
+              <div
+                style={{
+                  position: 'absolute',
+                  bottom: '24px',
+                  left: '24px',
+                  right: '24px',
+                  background: 'rgba(0,0,0,0.72)',
+                  color: 'white',
+                  padding: '12px 18px',
+                  borderRadius: '20px',
+                  fontSize: '0.9rem',
+                  textAlign: 'center',
+                  backdropFilter: 'blur(6px)',
+                  border: '1px solid rgba(255,255,255,0.12)',
+                  maxWidth: '600px',
+                  margin: '0 auto'
+                }}
+              >
+                {post.caption}
+              </div>
+            )}
+          </div>
+
+          {/* RIGHT SIDE: Details & Comments Panel */}
+          <div
+            style={{
+              width: window.innerWidth > 768 ? '420px' : '100%',
+              height: window.innerWidth > 768 ? '100%' : '50vh',
+              background: '#ffffff',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '-8px 0 32px rgba(0,0,0,0.15)',
+              borderLeft: '1px solid rgba(255, 107, 139, 0.1)',
+              overflow: 'hidden',
+              color: '#4a373b'
+            }}
+          >
+            {/* Header (Sender Info) */}
+            <div
+              style={{
+                padding: '18px 20px',
+                borderBottom: '1px solid rgba(255, 107, 139, 0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                backgroundColor: 'white',
+                zIndex: 10
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <Avatar user={post.sender} isMine={isMySender} size={38} />
+                <div>
+                  <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#4a3e40' }}>{post.sender.displayName}</div>
+                  <div style={{ fontSize: '0.75rem', color: '#8c7377' }}>{timeAgo(post.createdAt)}</div>
+                </div>
+              </div>
+
+              {isMySender && (
+                <button
+                  onClick={handleDeletePost}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: '#e74c3c',
+                    padding: '6px 12px',
+                    borderRadius: '12px',
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                    backgroundColor: 'rgba(231,76,60,0.05)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  <Trash2 size={13} /> Xóa bài
+                </button>
+              )}
+            </div>
+
+            {/* Scrollable Comments area */}
+            <div
+              style={{
+                flex: 1,
+                overflowY: 'auto',
+                padding: '20px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '16px'
+              }}
+            >
+              {post.caption && (
+                <div
+                  style={{
+                    padding: '12px 14px',
+                    backgroundColor: 'rgba(255, 107, 139, 0.04)',
+                    border: '1px solid rgba(255, 107, 139, 0.08)',
+                    borderRadius: '16px',
+                    fontSize: '0.88rem',
+                    color: '#4a373b',
+                    lineHeight: 1.4
+                  }}
+                >
+                  <strong>{post.sender.displayName}:</strong> {post.caption}
+                </div>
+              )}
+
+              {/* Reactions count summary */}
+              {reactionCounts.length > 0 && (
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', paddingBottom: '10px', borderBottom: '1px solid rgba(255, 107, 139, 0.08)' }}>
+                  {reactionCounts.map(([emoji, count]) => (
+                    <span key={emoji} style={{ fontSize: '0.78rem', backgroundColor: 'rgba(255,107,139,0.08)', color: '#ff6b8b', padding: '4px 10px', borderRadius: '20px', fontWeight: 600, border: '1px solid rgba(255,107,139,0.15)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      {emoji} {count}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* Comments rendering */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                {post.comments.length === 0 ? (
+                  <p style={{ fontSize: '0.85rem', color: '#8c7377', textAlign: 'center', padding: '20px 0' }}>Chưa có bình luận nào. Hãy gửi lời yêu thương! 💬</p>
+                ) : (
+                  post.comments.map((comment) => {
+                    const isMine = String(comment.userId) === String(currentUser.id);
+                    const cs     = getCS(comment._id);
+                    const cReactions = (() => { const m = {}; (comment.reactions || []).forEach(r => { m[r.emoji] = (m[r.emoji]||0)+1; }); return Object.entries(m); })();
+
+                    return (
+                      <div key={comment._id}>
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                          <div style={{ width: 28, height: 28, borderRadius: '50%', background: isMine ? '#ff6b8b' : '#e6a100', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '0.7rem', flexShrink: 0 }}>
+                            {comment.displayName?.charAt(0).toUpperCase()}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ background: isMine ? 'rgba(255,107,139,0.06)' : 'rgba(230,161,0,0.05)', borderRadius: '14px', padding: '8px 12px', border: isMine ? '1px solid rgba(255,107,139,0.12)' : '1px solid rgba(230,161,0,0.12)', opacity: comment.deleted ? 0.5 : 1 }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: isMine ? '#ff6b8b' : '#e6a100' }}>{comment.displayName}</span>
+                                <span style={{ fontSize: '0.65rem', color: '#8c7377' }}>{timeAgo(comment.createdAt)}{comment.editedAt && ' · đã sửa'}</span>
+                              </div>
+                              {cs.editing && !comment.deleted ? (
+                                <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
+                                  <input
+                                    value={cs.editText ?? comment.text}
+                                    onChange={e => setCS(comment._id, { editText: e.target.value })}
+                                    style={{ flex: 1, padding: '5px 10px', fontSize: '0.82rem', borderRadius: '10px', border: '1px solid #ffd3da', background: 'white' }}
+                                    autoFocus
+                                    onKeyDown={e => { if (e.key === 'Enter') handleEditComment(comment._id); if (e.key === 'Escape') setCS(comment._id, { editing: false }); }}
+                                  />
+                                  <button onClick={() => handleEditComment(comment._id)} style={{ background: '#ff6b8b', border: 'none', borderRadius: '8px', color: '#fff', cursor: 'pointer', padding: '4px 8px' }}><Check size={12} /></button>
+                                  <button onClick={() => setCS(comment._id, { editing: false })} style={{ background: 'none', border: '1px solid #ffd3da', borderRadius: '8px', color: '#8c7377', cursor: 'pointer', padding: '4px 8px' }}><X size={12} /></button>
+                                </div>
+                              ) : (
+                                <>
+                                  {comment.text && <p style={{ fontSize: '0.85rem', color: comment.deleted ? '#8c7377' : '#4a373b', lineHeight: 1.4, margin: 0, fontStyle: comment.deleted ? 'italic' : 'normal' }}>{comment.text}</p>}
+                                  {comment.imageUrl && !comment.deleted && <img src={comment.imageUrl} alt="" style={{ marginTop: '6px', maxWidth: '100%', borderRadius: '10px', maxHeight: '180px', objectFit: 'cover' }} />}
+                                </>
+                              )}
+                            </div>
+
+                            {!comment.deleted && (
+                              <div style={{ display: 'flex', gap: '8px', marginTop: '4px', paddingLeft: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                <div style={{ position: 'relative' }}>
+                                  <button onClick={() => setEmojiTarget(emojiTarget === comment._id ? null : comment._id)}
+                                    style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', color: '#8c7377', display: 'flex', alignItems: 'center', gap: '2px', padding: '2px 4px' }}>
+                                    <Smile size={12} /> <span style={{ fontSize: '0.7rem' }}>Tim</span>
+                                  </button>
+                                  {emojiTarget === comment._id && (
+                                    <div style={{ position: 'absolute', bottom: '24px', left: 0, background: 'white', border: '1px solid #ffd3da', borderRadius: '20px', padding: '4px 8px', display: 'flex', gap: '4px', zIndex: 1000, boxShadow: '0 4px 16px rgba(255,107,139,0.18)', whiteSpace: 'nowrap' }}>
+                                      {COMMENT_EMOJIS.map(emoji => (
+                                        <button key={emoji} onClick={() => handleCommentReact(comment._id, emoji)}
+                                          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem', padding: '2px 4px', borderRadius: '10px', transition: 'transform 0.15s' }}
+                                          onMouseOver={e => e.currentTarget.style.transform = 'scale(1.35)'}
+                                          onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'}
+                                        >{emoji}</button>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+
+                                <button onClick={() => setCS(comment._id, { replyOpen: !cs.replyOpen })}
+                                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.7rem', color: '#8c7377', display: 'flex', alignItems: 'center', gap: '2px', padding: '2px 4px' }}>
+                                  <CornerDownRight size={12} /> Trả lời
+                                </button>
+
+                                {isMine && !comment.deleted && (
+                                  <>
+                                    <button onClick={() => setCS(comment._id, { editing: true, editText: comment.text })}
+                                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.7rem', color: '#8c7377', display: 'flex', alignItems: 'center', gap: '2px', padding: '2px 4px' }}>
+                                      <Pencil size={11} /> Sửa
+                                    </button>
+                                    <button onClick={() => handleDeleteComment(comment._id)}
+                                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.7rem', color: '#e74c3c', display: 'flex', alignItems: 'center', gap: '2px', padding: '2px 4px' }}>
+                                      <Trash2 size={11} /> Xóa
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            )}
+
+                            {cReactions.length > 0 && (
+                              <div style={{ display: 'flex', gap: '4px', marginTop: '4px', paddingLeft: '4px', flexWrap: 'wrap' }}>
+                                {cReactions.map(([e, c]) => (
+                                  <span key={e} style={{ fontSize: '0.7rem', background: 'rgba(255,107,139,0.08)', borderRadius: '12px', padding: '2px 7px', border: '1px solid rgba(255,107,139,0.14)', color: '#ff6b8b', fontWeight: 600 }}>{e} {c}</span>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Replies */}
+                            {(comment.replies || []).map((reply) => {
+                              const rMine = String(reply.userId) === String(currentUser.id);
+                              const rs    = getRS(comment._id, reply._id);
+                              const rReactions = (() => { const m = {}; (reply.reactions || []).forEach(r => { m[r.emoji]=(m[r.emoji]||0)+1; }); return Object.entries(m); })();
+
+                              return (
+                                <div key={reply._id || Math.random()} style={{ marginTop: '6px', marginLeft: '12px', display: 'flex', gap: '6px' }}>
+                                  <CornerDownRight size={11} color="#c0aab0" style={{ marginTop: '5px', flexShrink: 0 }} />
+                                  <div style={{ flex: 1 }}>
+                                    <div style={{ background: rMine ? 'rgba(255,107,139,0.05)' : 'rgba(235,161,0,0.04)', borderRadius: '12px', padding: '6px 10px', border: rMine ? '1px solid rgba(255,107,139,0.1)' : '1px solid rgba(230,161,0,0.1)', opacity: reply.deleted ? 0.5 : 1 }}>
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                                        <span style={{ fontSize: '0.7rem', fontWeight: 700, color: rMine ? '#ff6b8b' : '#e6a100' }}>
+                                          {reply.displayName}
+                                          {reply.replyToDisplayName && <span style={{ color: '#ff6b8b', fontWeight: 600 }}> @{reply.replyToDisplayName}</span>}
+                                        </span>
+                                        <span style={{ fontSize: '0.62rem', color: '#8c7377' }}>{timeAgo(reply.createdAt)}{reply.editedAt && ' · đã sửa'}</span>
+                                      </div>
+                                      {rs.editing && !reply.deleted ? (
+                                        <div style={{ display: 'flex', gap: '6px', marginTop: '2px' }}>
+                                          <input
+                                            value={rs.editText ?? reply.text}
+                                            onChange={e => setRS(comment._id, reply._id, { editText: e.target.value })}
+                                            style={{ flex: 1, padding: '4px 8px', fontSize: '0.8rem', borderRadius: '8px', border: '1px solid #ffd3da', background: 'white' }}
+                                            autoFocus
+                                            onKeyDown={e => { if (e.key === 'Enter') handleEditReply(comment._id, reply._id, rs.editText ?? reply.text); if (e.key === 'Escape') setRS(comment._id, reply._id, { editing: false }); }}
+                                          />
+                                          <button onClick={() => handleEditReply(comment._id, reply._id, rs.editText ?? reply.text)} style={{ background: '#ff6b8b', border: 'none', borderRadius: '6px', color: '#fff', cursor: 'pointer', padding: '3px 7px' }}><Check size={11} /></button>
+                                          <button onClick={() => setRS(comment._id, reply._id, { editing: false })} style={{ background: 'none', border: '1px solid #ffd3da', borderRadius: '6px', color: '#8c7377', cursor: 'pointer', padding: '3px 7px' }}><X size={11} /></button>
+                                        </div>
+                                      ) : (
+                                        <>
+                                          {reply.text && <p style={{ fontSize: '0.82rem', color: reply.deleted ? '#8c7377' : '#4a373b', margin: 0, fontStyle: reply.deleted ? 'italic' : 'normal' }}>{reply.text}</p>}
+                                          {reply.imageUrl && !reply.deleted && <img src={reply.imageUrl} alt="" style={{ marginTop: '4px', maxWidth: '100%', borderRadius: '8px', maxHeight: '140px', objectFit: 'cover' }} />}
+                                        </>
+                                      )}
+                                    </div>
+
+                                    {!reply.deleted && (
+                                      <div style={{ display: 'flex', gap: '8px', marginTop: '3px', paddingLeft: '2px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                        <button onClick={() => setRS(comment._id, reply._id, { open: !rs.open })}
+                                          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.68rem', color: '#8c7377', display: 'flex', alignItems: 'center', gap: '2px', padding: '1px 3px' }}>
+                                          <CornerDownRight size={11} /> Trả lời
+                                        </button>
+                                        {rMine && (
+                                          <>
+                                            <button onClick={() => setRS(comment._id, reply._id, { editing: true, editText: reply.text })}
+                                              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.68rem', color: '#8c7377', display: 'flex', alignItems: 'center', gap: '2px', padding: '1px 3px' }}>
+                                              <Pencil size={10} /> Sửa
+                                            </button>
+                                            <button onClick={() => handleDeleteReply(comment._id, reply._id)}
+                                              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.68rem', color: '#e74c3c', display: 'flex', alignItems: 'center', gap: '2px', padding: '1px 3px' }}>
+                                              <Trash2 size={10} /> Xóa
+                                            </button>
+                                          </>
+                                        )}
+                                      </div>
+                                    )}
+
+                                    {rReactions.length > 0 && (
+                                      <div style={{ display: 'flex', gap: '3px', marginTop: '2px', flexWrap: 'wrap' }}>
+                                        {rReactions.map(([e, c]) => (
+                                          <span key={e} style={{ fontSize: '0.65rem', background: 'rgba(255,107,139,0.06)', borderRadius: '10px', padding: '1px 5px', border: '1px solid rgba(255,107,139,0.12)', color: '#ff6b8b' }}>{e} {c}</span>
+                                        ))}
+                                      </div>
+                                    )}
+
+                                    {rs.open && (
+                                      <form onSubmit={(e) => handleSendReplyToReply(e, comment._id, reply._id)}
+                                        style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                        {rs.preview && (
+                                          <div style={{ position: 'relative', display: 'inline-block' }}>
+                                            <img src={rs.preview} alt="" style={{ maxHeight: '80px', borderRadius: '8px', objectFit: 'cover' }} />
+                                            <button type="button" onClick={() => setRS(comment._id, reply._id, { file: null, preview: '' })}
+                                              style={{ position: 'absolute', top: '-5px', right: '-5px', background: '#ff6b8b', border: 'none', borderRadius: '50%', width: '16px', height: '16px', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                              <X size={9} />
+                                            </button>
+                                          </div>
+                                        )}
+                                        <div style={{ display: 'flex', gap: '5px' }}>
+                                          <input type="text"
+                                            placeholder={`Trả lời @${reply.displayName}...`}
+                                            value={rs.text || ''}
+                                            onChange={e => setRS(comment._id, reply._id, { text: e.target.value })}
+                                            style={{ flex: 1, padding: '6px 10px', fontSize: '0.8rem', borderRadius: '10px', border: '1px solid #ffd3da', background: 'white' }}
+                                            disabled={rs.loading}
+                                          />
+                                          <button type="button" onClick={() => { const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.onchange = (ev) => { const f = ev.target.files[0]; if (f) setRS(comment._id, reply._id, { file: f, preview: URL.createObjectURL(f) }); }; inp.click(); }}
+                                            style={{ background: 'none', border: '1px solid #ffd3da', borderRadius: '8px', cursor: 'pointer', color: '#8c7377', padding: '0 8px', display: 'flex', alignItems: 'center' }}>
+                                            <Image size={12} />
+                                          </button>
+                                          <button type="submit" className="btn-primary"
+                                            style={{ padding: '6px 10px', borderRadius: '8px', fontSize: '0.78rem' }} disabled={rs.loading}>
+                                            <Send size={11} />
+                                          </button>
+                                        </div>
+                                      </form>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+
+                            {cs.replyOpen && (
+                              <form onSubmit={(e) => handleSendReply(e, comment._id)}
+                                style={{ marginTop: '8px', marginLeft: '12px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                                {cs.replyPreview && (
+                                  <div style={{ position: 'relative', display: 'inline-block' }}>
+                                    <img src={cs.replyPreview} alt="" style={{ maxHeight: '90px', borderRadius: '8px', objectFit: 'cover' }} />
+                                    <button type="button" onClick={() => setCS(comment._id, { replyFile: null, replyPreview: '' })}
+                                      style={{ position: 'absolute', top: '-6px', right: '-6px', background: '#ff6b8b', border: 'none', borderRadius: '50%', width: '17px', height: '17px', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                      <X size={10} />
+                                    </button>
+                                  </div>
+                                )}
+                                <div style={{ display: 'flex', gap: '6px' }}>
+                                  <input type="text" placeholder="Trả lời..."
+                                    value={cs.replyText || ''}
+                                    onChange={e => setCS(comment._id, { replyText: e.target.value })}
+                                    style={{ flex: 1, padding: '7px 12px', fontSize: '0.82rem', borderRadius: '12px', border: '1px solid #ffd3da', background: 'white' }}
+                                    disabled={cs.replyLoading}
+                                  />
+                                  <button type="button" onClick={() => { const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.onchange = (ev) => { const f = ev.target.files[0]; if (f) setCS(comment._id, { replyFile: f, replyPreview: URL.createObjectURL(f) }); }; inp.click(); }}
+                                    style={{ background: 'none', border: '1px solid #ffd3da', borderRadius: '10px', cursor: 'pointer', color: '#8c7377', padding: '0 10px', display: 'flex', alignItems: 'center' }}>
+                                    <Image size={14} />
+                                  </button>
+                                  <button type="submit" className="btn-primary"
+                                    style={{ padding: '7px 12px', borderRadius: '10px', fontSize: '0.8rem' }} disabled={cs.replyLoading}>
+                                    <Send size={13} />
+                                  </button>
+                                </div>
+                              </form>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            {/* Reactions selection bar inside lightbox */}
+            <div
+              style={{
+                padding: '12px 20px',
+                borderTop: '1px solid rgba(255, 107, 139, 0.08)',
+                backgroundColor: '#fffcfd',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between'
+              }}
+            >
+              <div style={{ display: 'flex', gap: '4px', background: 'rgba(255,255,255,0.9)', padding: '4px 8px', borderRadius: '24px', border: '1px solid #ffd3da', boxShadow: 'var(--shadow-sm)' }}>
+                {POST_EMOJIS.map(emoji => {
+                  const active = myPostReaction === emoji;
+                  return (
+                    <button key={emoji} onClick={(e) => handlePostReact(e, emoji)}
+                      style={{ background: active ? '#ffd3da' : 'none', border: 'none', fontSize: '1.25rem', cursor: 'pointer', padding: '2px 6px', borderRadius: '12px', transition: 'transform 0.15s', transform: active ? 'scale(1.2)' : 'none' }}
+                      onMouseOver={e => e.currentTarget.style.transform = 'scale(1.35)'}
+                      onMouseOut={e => e.currentTarget.style.transform = active ? 'scale(1.2)' : 'scale(1)'}
+                    >{emoji}</button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Comment input form at the bottom */}
+            <div
+              style={{
+                padding: '16px 20px',
+                borderTop: '1px solid rgba(255, 107, 139, 0.1)',
+                backgroundColor: '#ffffff'
+              }}
+            >
+              <form onSubmit={handleSendComment} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {commentPreview && (
+                  <div style={{ position: 'relative', display: 'inline-block', alignSelf: 'flex-start' }}>
+                    <img src={commentPreview} alt="" style={{ maxHeight: '100px', borderRadius: '10px', objectFit: 'cover' }} />
+                    <button type="button" onClick={() => { setCommentFile(null); setCommentPreview(''); }}
+                      style={{ position: 'absolute', top: '-6px', right: '-6px', background: '#ff6b8b', border: 'none', borderRadius: '50%', width: '20px', height: '20px', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <X size={11} />
+                    </button>
+                  </div>
+                )}
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input type="text" placeholder="Viết bình luận công khai..."
+                    value={commentText} onChange={e => setCommentText(e.target.value)}
+                    style={{ flex: 1, padding: '10px 14px', fontSize: '0.85rem', borderRadius: '12px', border: '1px solid #ffd3da', background: 'white' }}
+                    disabled={commentLoading}
+                  />
+                  <input ref={commentFileRef} type="file" accept="image/*" style={{ display: 'none' }}
+                    onChange={e => { const f = e.target.files[0]; if (f) { setCommentFile(f); setCommentPreview(URL.createObjectURL(f)); } }}
+                  />
+                  <button type="button" onClick={() => commentFileRef.current?.click()}
+                    style={{ background: 'none', border: '1px solid #ffd3da', borderRadius: '12px', cursor: 'pointer', color: '#8c7377', padding: '0 12px', display: 'flex', alignItems: 'center' }}>
+                    <Image size={16} />
+                  </button>
+                  <button type="submit" className="btn-primary" style={{ padding: '10px 16px', borderRadius: '12px' }} disabled={commentLoading}>
+                    <Send size={15} />
+                  </button>
+                </div>
+              </form>
+            </div>
+
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );

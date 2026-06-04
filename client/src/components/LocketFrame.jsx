@@ -188,10 +188,8 @@ export default function LocketFrame({ onUploadSuccess, apiBase, token }) {
 
       {/* Physical-style Circular Squircle Widget */}
       <div 
-        className="locket-pulse" 
+        className="locket-pulse locket-widget" 
         style={{
-          width: '280px',
-          height: '280px',
           borderRadius: '30%',
           overflow: 'hidden',
           backgroundColor: '#2d1e21',
