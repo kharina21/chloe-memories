@@ -152,7 +152,7 @@ export default function App() {
     setToken(newToken);
   };
 
-  const handleLogout = () => {
+  function handleLogout() {
     localStorage.removeItem('thoiu_token');
     disconnectSocket();
     socketRef.current = null;
@@ -161,7 +161,7 @@ export default function App() {
     setUser(null);
     setPosts([]);
     setView('auth');
-  };
+  }
 
   // ── Soft-delete post from feed ───────────────────────────────────────────
   const handlePostDelete = (postId) => {

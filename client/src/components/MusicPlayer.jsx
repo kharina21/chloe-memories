@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  Play, Pause, Square, Volume2, VolumeX, Music, Disc,
-  ChevronDown, ChevronUp, Heart, User, SkipBack, SkipForward,
-  Shuffle, Repeat, Repeat1, List, X
+  Play, Pause, Volume2, VolumeX, Music, Disc,
+  ChevronDown, SkipBack, SkipForward,
+  Shuffle, Repeat, Repeat1, List
 } from 'lucide-react';
 
 /* ─────────────────────────────────────────────────────────
@@ -57,9 +57,9 @@ function Visualizer({ isPlaying }) {
 
 /* ─────────────────────────────────────────────────────────
    MusicPlayer — single responsive instance
-   Props: partnerMusic, myMusic, apiBase, token
+   Props: partnerMusic, myMusic
 ───────────────────────────────────────────────────────── */
-export default function MusicPlayer({ partnerMusic, myMusic, apiBase, token }) {
+export default function MusicPlayer({ partnerMusic, myMusic }) {
   // ── Queue & index ────────────────────────────────────────
   const [queue, setQueue]           = useState([]);
   const [idx, setIdx]               = useState(0);
@@ -105,6 +105,23 @@ export default function MusicPlayer({ partnerMusic, myMusic, apiBase, token }) {
 
   const currentSong = queue[idx] || null;
 
+  // ── Song ended handler ────────────────────────────────────
+  const handleEnded = useCallback(() => {
+    if (repeatMode === 'one') {
+      try {
+        playerRef.current?.seekTo(0, true);
+        playerRef.current?.playVideo();
+      } catch (err) {
+        console.error("Error in handleEnded repeat:", err);
+      }
+    } else if (queue.length > 1 && (repeatMode === 'all' || idx < queue.length - 1)) {
+      setIdx(prev => (prev + 1) % queue.length);
+    } else {
+      setIsPlaying(false);
+      setCurrentTime(0);
+    }
+  }, [repeatMode, queue.length, idx]);
+
   // ── YouTube player setup ──────────────────────────────────
   useEffect(() => {
     if (!currentSong || currentSong.source !== 'youtube') {
@@ -134,9 +151,14 @@ export default function MusicPlayer({ partnerMusic, myMusic, apiBase, token }) {
 
       // If player already exists — just load new video
       if (playerRef.current && typeof playerRef.current.loadVideoById === 'function') {
-        playerRef.current.loadVideoById({ videoId: currentSong.id, suggestedQuality: 'small' });
-        playerRef.current.setVolume(isMuted ? 0 : volume);
-        return;
+        try {
+          playerRef.current.loadVideoById({ videoId: currentSong.id, suggestedQuality: 'small' });
+          playerRef.current.setVolume(isMuted ? 0 : volume);
+          return;
+        } catch (err) {
+          console.error("Failed to load video on existing player, recreating:", err);
+          playerRef.current = null;
+        }
       }
 
       playerRef.current = new window.YT.Player('yt-hidden-player', {
@@ -180,19 +202,6 @@ export default function MusicPlayer({ partnerMusic, myMusic, apiBase, token }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSong?.id]);
 
-  // ── Song ended handler ────────────────────────────────────
-  const handleEnded = useCallback(() => {
-    if (repeatMode === 'one') {
-      playerRef.current?.seekTo(0, true);
-      playerRef.current?.playVideo();
-    } else if (queue.length > 1 && (repeatMode === 'all' || idx < queue.length - 1)) {
-      setIdx(prev => (prev + 1) % queue.length);
-    } else {
-      setIsPlaying(false);
-      setCurrentTime(0);
-    }
-  }, [repeatMode, queue.length, idx]);
-
   // ── Poll timeline ─────────────────────────────────────────
   useEffect(() => {
     let timer;
@@ -215,7 +224,11 @@ export default function MusicPlayer({ partnerMusic, myMusic, apiBase, token }) {
   useEffect(() => {
     if (!autoplayBlocked) return;
     const recover = () => {
-      playerRef.current?.playVideo?.();
+      try {
+        playerRef.current?.playVideo?.();
+      } catch (err) {
+        console.error("Error in recover playVideo:", err);
+      }
       setAutoplayBlocked(false);
       setIsPlaying(true);
     };
@@ -230,20 +243,32 @@ export default function MusicPlayer({ partnerMusic, myMusic, apiBase, token }) {
   // ── Controls ──────────────────────────────────────────────
   const togglePlay = () => {
     if (!playerRef.current) return;
-    if (isPlaying) { playerRef.current.pauseVideo(); setIsPlaying(false); }
-    else           { playerRef.current.playVideo();  setIsPlaying(true);  setAutoplayBlocked(false); }
+    try {
+      if (isPlaying) { playerRef.current.pauseVideo(); setIsPlaying(false); }
+      else           { playerRef.current.playVideo();  setIsPlaying(true);  setAutoplayBlocked(false); }
+    } catch (err) {
+      console.error("Error in togglePlay:", err);
+    }
   };
 
   const handleStop = () => {
-    playerRef.current?.pauseVideo?.();
-    playerRef.current?.seekTo?.(0, true);
+    try {
+      playerRef.current?.pauseVideo?.();
+      playerRef.current?.seekTo?.(0, true);
+    } catch (err) {
+      console.error("Error in handleStop:", err);
+    }
     setIsPlaying(false);
     setCurrentTime(0);
   };
 
   const prev = () => {
     if (currentTime > 3 && playerRef.current) {
-      playerRef.current.seekTo(0, true);
+      try {
+        playerRef.current.seekTo(0, true);
+      } catch (err) {
+        console.error("Error in prev seekTo:", err);
+      }
       setCurrentTime(0);
     } else {
       setIdx(prev => (prev - 1 + queue.length) % queue.length);
@@ -260,20 +285,34 @@ export default function MusicPlayer({ partnerMusic, myMusic, apiBase, token }) {
   const handleSeekEnd = (e) => {
     const t = parseFloat(e.target.value);
     setCurrentTime(t);
-    playerRef.current?.seekTo?.(t, true);
+    try {
+      playerRef.current?.seekTo?.(t, true);
+    } catch (err) {
+      console.error("Error in handleSeekEnd:", err);
+    }
     isSeeking.current = false;
   };
 
   const handleVolumeChange = (e) => {
     const v = parseInt(e.target.value, 10);
     setVolume(v);
-    if (playerRef.current) playerRef.current.setVolume(isMuted ? 0 : v);
+    if (playerRef.current) {
+      try {
+        playerRef.current.setVolume(isMuted ? 0 : v);
+      } catch (err) {
+        console.error("Error in handleVolumeChange:", err);
+      }
+    }
   };
 
   const toggleMute = () => {
     const m = !isMuted;
     setIsMuted(m);
-    playerRef.current?.setVolume?.(m ? 0 : volume);
+    try {
+      playerRef.current?.setVolume?.(m ? 0 : volume);
+    } catch (err) {
+      console.error("Error in toggleMute:", err);
+    }
   };
 
   const toggleShuffle = () => {
